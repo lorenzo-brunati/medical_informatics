@@ -5,7 +5,7 @@ class LoginApp():
     def __init__(self): # Runs only ONCE
         
         # Both CONN and CURSOR are created as ATTRIBUTES of the CLASS
-        self.conn = sql.connect("Project/database.db")
+        self.conn = sql.connect("database.db")
         self.cursor = self.conn.cursor()
 
         self.root = ctk.CTk() # ROOT (Main Window) in the Hierarchical Structure
@@ -71,11 +71,11 @@ class LoginApp():
                 user_type = self.cursor.fetchone()[0]
 
                 if user_type == "Patient":
-                    print("Patient") # patientApp
+                    PatientApp()
                 elif user_type == "Doctor":
-                    print("Doctor") # DoctorApp
+                    DoctorApp()
                 else:
-                    print("Admin") # AdminApp
+                    AdminApp()
 
             else:
                 self.outcome_label.configure(text=f"Wrong Password")
@@ -85,6 +85,61 @@ class LoginApp():
             self.outcome_label.configure(text="Username doesn't exist.") # UPDATE Label Text
             self.outcome_label.configure(text_color="red")
 
-LoginApp()
+class DoctorApp():
+    def __init__(self):
+        
+        self.conn = sql.connect("database.db")
+        self.cursor = self.conn.cursor()
 
-# PROVA
+        self.root = ctk.CTk()
+        self.root.title("DoctorApp")
+        self.root.geometry("400x400")
+
+        self.setup_gui()
+
+        self.root.mainloop()
+    
+    def setup_gui(self):
+        self.temp = ctk.CTkLabel(self.root, text="Doctor App",
+                                        font=('Arial', 14), width=300, height=30)
+        self.temp.place(x=0, y=30)
+
+class PatientApp():
+    def __init__(self):
+        
+        self.conn = sql.connect("database.db")
+        self.cursor = self.conn.cursor()
+
+        self.root = ctk.CTk()
+        self.root.title("PatientApp")
+        self.root.geometry("400x400")
+
+        self.setup_gui()
+
+        self.root.mainloop()
+    
+    def setup_gui(self):
+        self.temp = ctk.CTkLabel(self.root, text="Patient App",
+                                        font=('Arial', 14), width=300, height=30)
+        self.temp.place(x=0, y=30)
+
+class AdminApp():
+    def __init__(self):
+        
+        self.conn = sql.connect("database.db")
+        self.cursor = self.conn.cursor()
+
+        self.root = ctk.CTk()
+        self.root.title("AdminApp")
+        self.root.geometry("400x400")
+
+        self.setup_gui()
+
+        self.root.mainloop()
+    
+    def setup_gui(self):
+        self.temp = ctk.CTkLabel(self.root, text="Admin App",
+                                        font=('Arial', 14), width=300, height=30)
+        self.temp.place(x=0, y=30)
+
+LoginApp()
