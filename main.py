@@ -2,6 +2,29 @@ import sqlite3 as sql
 import customtkinter as ctk
 import PIL.Image
 
+# --- I MIEI COLORI ---
+# Li tengo qui così se mi stufo del blu cambio solo una riga
+COLORS = {
+    "sfondo_grigino": "#E8EBF2",
+    "bianco_puro": "#FFFFFF",
+    "blu_acceso": "#3366cc",
+    "testo_scuro": "#475569",
+    "testo_chiaro": "#9DA1A7",
+    "bordi": "#BFC6D1",
+    "bottone_grigio": "#DCE1E9"
+}
+
+# --- I MIEI FONT ---
+# Montserrat è ovunque, qui decido solo le grandezze
+FONTS = {
+    "titolo": ("Montserrat", 22, "bold"),
+    "sottotitolo": ("Montserrat", 17, "italic"),
+    "testo_normale": ("Montserrat", 14),
+    "testo_bold": ("Montserrat", 14, "bold"),
+    "micro_bold": ("Montserrat", 8, "bold")
+}
+
+
 class LoginApp():
     def __init__(self): # Runs only ONCE
         
@@ -164,188 +187,205 @@ class DoctorApp():
 
 class PatientApp():
     def __init__(self, username):
-        
         self.user = username
+        
+        # Database e finestra principale
         self.conn = sql.connect("database.db")
         self.cursor = self.conn.cursor()
-
         self.root = ctk.CTk()
         self.root.title("PatientApp")
         self.root.geometry("1600x900")
+        
+        # Questa mi serve per distruggere la pagina vecchia quando cambio sezione
+        self.current_page_frame = None
 
+        # Carico le icone e poi costruisco la grafica
+        self.carica_icone()
         self.setup_gui()
-
+        
         self.root.mainloop()
-    
-    def setup_gui(self):
-        self.topbar = ctk.CTkFrame(self.root, width=1600, height=80, fg_color="#E8EBF2")
-        self.topbar.place(x=0, y=0)
 
-        self.cursor.execute("SELECT name FROM user WHERE username = ?", self.user)
-        name = self.cursor.fetchone()[0]
-
-        self.name = ctk.CTkLabel(self.topbar, text=f"Hello, {name} ", font=('Montserrat', 16, "bold", "italic"), text_color="#9DA1A7")
-        self.name.place(x=20, y=12)
-
-        self.subtitle = ctk.CTkLabel(self.topbar, text="Welcome back!", font=('Montserrat', 22), text_color="#475569")
-        self.subtitle.place(x=20, y=35)
-
-        buttons_names = ["Dashboard", "Data", "Appointments", "Support"]
-        self.menu_buttons = []
-
-        self.button_menu = ctk.CTkFrame(self.topbar, fg_color="transparent")
-        self.button_menu.place(x=300, y=32)
-
-        side_buttons_names = ["Notifications", "Profile"]
-        self.side_buttons = []
-
-        self.icon_notif_dark = ctk.CTkImage(light_image=PIL.Image.open("icons/dark_bell.png"), size=(24, 24))
-        self.icon_profile_dark = ctk.CTkImage(light_image=PIL.Image.open("icons/dark_user.png"), size=(20, 20))
-
+    def carica_icone(self):
+        # Le carico una volta sola all'inizio così l'app è più veloce
+        # light_image è quella che si vede sullo sfondo chiaro dell'app
+        self.icon_notif = ctk.CTkImage(light_image=PIL.Image.open("icons/dark_bell.png"), size=(24, 24))
+        self.icon_profile = ctk.CTkImage(light_image=PIL.Image.open("icons/dark_user.png"), size=(20, 20))
+        # Versione chiara per quando il tasto diventa blu/scuro
         self.icon_notif_light = ctk.CTkImage(light_image=PIL.Image.open("icons/light_bell.png"), size=(24, 24))
         self.icon_profile_light = ctk.CTkImage(light_image=PIL.Image.open("icons/light_user.png"), size=(20, 20))
 
+    # --- FUNZIONE PER PESCARE I DATI DAL DB ---
+    def recupera_info_db(self):
+        # Prendo l'ID del paziente
+        self.cursor.execute("SELECT Id FROM USER WHERE Username = ?", self.user)
+        user_row = self.cursor.fetchone()
+        if not user_row: return None
+        p_id = user_row[0]
 
-        self.side_topbar = ctk.CTkFrame(self.topbar, fg_color="transparent")
-        self.side_topbar.place(x=1064, y=22)
+        # Funzioncina interna per non ripetere la query chilometrica dei dati numerici
+        def get_latest(metrica):
+            self.cursor.execute("""
+                SELECT N.Mean FROM DATA D 
+                JOIN NUMERICAL_DATA N ON D.IdData = N.IdNumData 
+                WHERE D.IdPatient = ? AND D.NameData = ? 
+                ORDER BY D.Date DESC LIMIT 1
+            """, (p_id, metrica))
+            res = self.cursor.fetchone()
+            return f"{res[0]:.1f}" if res else "--"
 
-        self.profile_menu = ctk.CTkOptionMenu(
-            self.root, # Attaccato alla root
-            values=["Personal Information", "Settings", "Logout"],
-            command=self.handle_dropdown_profile,
-            dynamic_resizing=False,
-            width=30,
-            dropdown_fg_color="#475569",      
-            dropdown_hover_color="#BFC6D1",   
-            dropdown_text_color="#E8EBF2",    
-            dropdown_font=("Montserrat", 8, "bold")
-        )
+        # Recupero la terapia
+        self.cursor.execute("SELECT Description FROM THERAPY WHERE IdPatient = ? ORDER BY Date DESC LIMIT 1", (p_id,))
+        terapia = (self.cursor.fetchone() or ["No active therapy."])[0]
 
-        for name in buttons_names:
-            btn = ctk.CTkButton(
-                self.button_menu,
-                text=name,
-                width=160,
-                height=30,
-                corner_radius=20,
-                fg_color="#DCE1E9",
-                border_color="#BFC6D1",
-                border_width=1,
-                hover_color="#BFC6D1",
-                text_color="#475569",
-                font=("Montserrat", 14))
-            
+        # Recupero l'appuntamento
+        self.cursor.execute("SELECT Date, Time FROM APPOINTMENT WHERE IdPatient = ? ORDER BY Date ASC LIMIT 1", (p_id,))
+        app_res = self.cursor.fetchone()
+        appuntamento = f"{app_res[0]} at {app_res[1]}" if app_res else "No upcoming appointments."
 
-            btn.configure(command=lambda b=btn: self.handle_click_main(b))
-            
+        # Impacchetto tutto e lo spedisco alla dashboard
+        return {
+            "vitals": f"SBP: {get_latest('SBP')} mmHg\n\nDBP: {get_latest('DBP')} mmHg\n\nHR: {get_latest('HR')} bpm",
+            "fitness": f"VO2 Max: {get_latest('VO2Max')}\n\nSpO2: {get_latest('SPO2')} %",
+            "activity": f"Sleep: {get_latest('SleepHours')} h\n\nSteps: {get_latest('StepCount')}",
+            "therapy": terapia,
+            "appointment": appuntamento
+        }
+
+    def setup_gui(self):
+        # La barra in alto grigia
+        self.topbar = ctk.CTkFrame(self.root, width=1600, height=100, fg_color=COLORS["sfondo_grigino"])
+        self.topbar.place(x=0, y=0)
+
+        # Prendo il nome dal database
+        self.cursor.execute("SELECT name FROM user WHERE username = ?", self.user)
+        res = self.cursor.fetchone()
+        nome_utente = res[0] if res else "User"
+
+        # Benvenuto in alto a sinistra
+        ctk.CTkLabel(self.topbar, text=f"Hello, {nome_utente}", font=FONTS["sottotitolo"], 
+                     text_color=COLORS["testo_chiaro"]).place(x=60, y=12)
+        ctk.CTkLabel(self.topbar, text="Welcome back!", font=FONTS["titolo"], 
+                     text_color=COLORS["testo_scuro"]).place(x=60, y=35)
+
+        # Contenitore per i bottoni centrali
+        self.menu_frame = ctk.CTkFrame(self.topbar, fg_color="transparent")
+        self.menu_frame.place(x=300, y=30)
+
+        self.menu_buttons = {} # Uso un dizionario per trovarli subito per nome
+        pagine = ["Dashboard", "Data", "Appointments", "Support"]
+
+        for nome in pagine:
+            btn = ctk.CTkButton(self.menu_frame, text=nome, width=140, height=35, corner_radius=20,
+                                fg_color=COLORS["bottone_grigio"], text_color=COLORS["testo_scuro"],
+                                font=FONTS["testo_normale"], border_width=1, border_color=COLORS["bordi"],
+                                hover_color=COLORS["bordi"], 
+                                command=lambda n=nome: self.cambia_pagina(n))
             btn.pack(side="left", padx=5)
-            self.menu_buttons.append(btn)
+            self.menu_buttons[nome] = btn
+
+        # Bottoni a destra (Notifiche e Profilo)
+        self.side_frame = ctk.CTkFrame(self.topbar, fg_color="transparent")
+        self.side_frame.place(x=1064, y=26)
         
-        if self.menu_buttons:
-            self.handle_click_main(self.menu_buttons[0])
-        
+        self.btn_notif = self.crea_tasto_icona(self.icon_notif, "Notifications")
+        self.btn_profile = self.crea_tasto_icona(self.icon_profile, "Profile")
 
-        for name in side_buttons_names:
-            side_btn = ctk.CTkButton(
-                self.side_topbar,
-                text="",
-                image=self.icon_profile_dark if name == "Profile" else self.icon_notif_dark,
-                width=36,
-                height=36,
-                corner_radius=18,
-                border_color="#BFC6D1",
-                fg_color="#DCE1E9",
-                border_width=2,
-                hover_color="#BFC6D1")
+        # Menu a tendina che compare sotto il profilo
+        self.profile_dropdown = ctk.CTkOptionMenu(self.root, values=["Personal Info", "Settings", "Logout"],
+                                                command=self.gestisci_dropdown, width=150,
+                                                dynamic_resizing=False,
+                                                dropdown_fg_color=COLORS["testo_scuro"],
+                                                dropdown_hover_color=COLORS["bordi"],
+                                                dropdown_text_color=COLORS["sfondo_grigino"], 
+                                                dropdown_font=FONTS["micro_bold"])
 
-            side_btn.ID = name
-            side_btn.configure(command=lambda b=side_btn: self.handle_click_side(b))
+        # Partiamo dalla Dashboard
+        self.cambia_pagina("Dashboard")
 
-            side_btn.pack(side="left", padx=5)
-            self.side_buttons.append(side_btn)
-
-    def update_main_button_colors(self, clicked_button):
-        for btn in self.menu_buttons:
-            btn.configure(fg_color="#DCE1E9", border_color="#BFC6D1", border_width=2, hover_color="#BFC6D1", text_color="#475569", font=("Montserrat", 14))
-        for side_btn in self.side_buttons:
-            button_id = getattr(side_btn, "ID", "")
-            side_btn.configure(image=self.icon_profile_dark if button_id == "Profile" else self.icon_notif_dark, border_width=1, hover_color="#BFC6D1", fg_color="#DCE1E9")
-        
-        clicked_button.configure(fg_color="#3366cc", border_color="#3366cc", border_width=2, text_color="#E8EBF2", font=("Montserrat", 14, "bold"), hover_color="#3366cc")
-
-
-    def handle_click_main(self, button):
-        self.update_main_button_colors(button)
-        
-        page = button.cget("text")
-        if page == "Dashboard":
-            self.show_dashboard();
-        elif page == "Data":
-            self.show_data();
-        elif page == "Appointments":
-            self.show_appointments();
-        elif page == "Support":
-           self.show_support();
+    def crea_tasto_icona(self, icona, nome):
+        btn = ctk.CTkButton(self.side_frame, text="", image=icona, width=38, height=38, corner_radius=19,
+                            fg_color=COLORS["bottone_grigio"], border_width=2, border_color=COLORS["bordi"],
+                            hover_color=COLORS["bordi"], command=lambda: self.cambia_pagina(nome))
+        btn.pack(side="left", padx=5)
+        return btn
     
+    def cambia_pagina(self, nome):
+        # 1. Pulisco la pagina attuale
+        if self.current_page_frame: 
+            self.current_page_frame.destroy()
+        
+        # 2. RESET TOTALE: Riporto tutti i bottoni (testo e icone) allo stato grigio/scuro
+        # Bottoni principali
+        for b in self.menu_buttons.values():
+            b.configure(fg_color=COLORS["bottone_grigio"], border_color=COLORS["bordi"], hover_color=COLORS["bordi"], text_color=COLORS["testo_scuro"], font=FONTS["testo_normale"])
+        
+        # Bottoni laterali (li rimettiamo scuri con sfondo grigio)
+        self.btn_notif.configure(fg_color=COLORS["bottone_grigio"], hover_color=COLORS["bordi"], border_color=COLORS["bordi"], image=self.icon_notif)
+        self.btn_profile.configure(fg_color=COLORS["bottone_grigio"], hover_color=COLORS["bordi"], border_color=COLORS["bordi"], image=self.icon_profile)
 
-    def update_side_button_colors(self, clicked_button):
-        for side_btn in self.side_buttons:
-            button_id = getattr(side_btn, "ID", "")
-            side_btn.configure(image=self.icon_profile_dark if button_id == "Profile" else self.icon_notif_dark, border_width=1, hover_color="#BFC6D1", fg_color="#DCE1E9")
-        for btn in self.menu_buttons:
-            btn.configure(fg_color="#DCE1E9", border_color="#BFC6D1", border_width=2, hover_color="#BFC6D1", text_color="#475569", font=("Montserrat", 14))
-        clicked_button.configure(fg_color="#475569", border_width=0, hover_color="#475569", image=self.icon_profile_light if clicked_button.cget("image") == self.icon_profile_dark else self.icon_notif_light)
+        # 3. ATTIVAZIONE: Chi è stato cliccato?
+        if nome in self.menu_buttons:
+            # Se è un bottone del menu principale: diventa blu con testo bianco
+            self.menu_buttons[nome].configure(fg_color=COLORS["blu_acceso"], hover_color=COLORS["blu_acceso"], border_color=COLORS["blu_acceso"], text_color="white", font=FONTS["testo_bold"])
+            self.mostra_dashboard() if nome == "Dashboard" else self.mostra_placeholder(nome)
 
-    def handle_click_side(self, button):
-        self.update_side_button_colors(button)
+        elif nome == "Notifications":
+            # Inversione: sfondo scuro e icona chiara
+            self.btn_notif.configure(fg_color=COLORS["testo_scuro"], hover_color=COLORS["testo_scuro"], border_color=COLORS["testo_scuro"], image=self.icon_notif_light)
+            self.mostra_placeholder(nome)
 
-        button_id = getattr(button, "ID", "")
-        if button_id == "Notifications":
-            self.show_notifications();
-        elif button_id == "Profile":
-            self.profile_menu.place(x = button.winfo_rootx() - self.root.winfo_rootx() + button.winfo_width() - self.profile_menu.winfo_width(), y = button.winfo_rooty() - self.root.winfo_rooty() + button.winfo_height() - 66)
-            self.root.update_idletasks()
-            self.profile_menu.update()
+        elif nome == "Profile":
+            # Inversione: sfondo scuro e icona chiara
+            self.btn_profile.configure(fg_color=COLORS["testo_scuro"], hover_color=COLORS["testo_scuro"], border_color=COLORS["testo_scuro"], image=self.icon_profile_light)
+            self.apri_menu_profilo()
+
+    def mostra_dashboard(self):
+        dati = self.recupera_info_db()
+
+        # Frame principale della dashboard
+        self.current_page_frame = ctk.CTkFrame(self.root, fg_color=COLORS["sfondo_grigino"])
+        self.current_page_frame.place(relx=0, rely=0.1, relwidth=1, relheight=0.9)
+
+        # Funzione helper interna per non ripetere 100 volte i parametri dei pannelli bianchi
+        def aggiungi_pannello(x, y, w, h, titolo, info):
+            p = ctk.CTkFrame(self.current_page_frame, fg_color="white", corner_radius=15, 
+                             border_width=2, border_color=COLORS["bordi"])
+            p.place(relx=x, rely=y, relwidth=w, relheight=h)
             
-            self.profile_menu._open_dropdown_menu();
+            ctk.CTkLabel(p, text=titolo, font=FONTS["testo_bold"], text_color=COLORS["testo_scuro"]).place(relx=0.05, rely=0.05)
+            ctk.CTkLabel(p, text=info, font=FONTS["testo_normale"], text_color=COLORS["testo_chiaro"] if titolo == "ECG:" else COLORS["blu_acceso"], justify="left").place(relx=0.05, rely=0.25)
 
-    def handle_dropdown_profile(self, choice):
-        print(f"Scelta selezionata: {choice}")
-        if choice == "Logout":
+        # Colonna 1
+        aggiungi_pannello(0.04, 0.05, 0.28, 0.42, "Vitals (Mean)", dati["vitals"])
+        aggiungi_pannello(0.04, 0.52, 0.28, 0.42, "Oxygen & Fitness", dati["fitness"])
+
+        # Colonna 2
+        aggiungi_pannello(0.34, 0.05, 0.28, 0.42, "Daily Activity", dati["activity"])
+        aggiungi_pannello(0.34, 0.52, 0.28, 0.42, "ECG:", "Signal data recorded.")
+
+        # Colonna 3
+        aggiungi_pannello(0.66, 0.05, 0.30, 0.58, "Therapy", dati["therapy"])
+        aggiungi_pannello(0.66, 0.68, 0.30, 0.26, "Next Appointment", dati["appointment"])
+
+    def apri_menu_profilo(self):
+        # Calcolo dove si trova il tasto profilo per schiaffarci sotto il menu
+        x = self.btn_profile.winfo_rootx() - self.root.winfo_rootx() -30
+        y = self.btn_profile.winfo_rooty() - self.root.winfo_rooty()
+        self.profile_dropdown.place(x=x - 110, y=y) # -110 per allinearlo un po' meglio
+        self.root.update_idletasks()
+        self.profile_dropdown._open_dropdown_menu()
+
+    def gestisci_dropdown(self, scelta):
+        if scelta == "Logout":
             self.root.destroy()
-        elif choice == "Personal Information":
-            self.show_profile()
-        elif choice == "Settings":
-            self.show_settings()
+        else:
+            print(f"Hai cliccato: {scelta}")
 
-    def show_dashboard(self):
-        self.mainpage = ctk.CTkFrame(self.root, width=1600, height=820, fg_color="#E8EBF2")
-        self.mainpage.place(x=0, y=80)
+    def mostra_placeholder(self, nome):
+        self.current_page_frame = ctk.CTkFrame(self.root, fg_color=COLORS["sfondo_grigino"])
+        self.current_page_frame.place(relx=0, rely=0.1, relwidth=1, relheight=0.9)
+        ctk.CTkLabel(self.current_page_frame, text=f"Section: {nome}", font=FONTS["titolo"]).pack(expand=True)
 
-    def show_data(self):
-        self.mainpage = ctk.CTkFrame(self.root, width=1600, height=820, fg_color="#E8EBF2")
-        self.mainpage.place(x=0, y=80)
-
-    def show_appointments(self):
-        self.mainpage = ctk.CTkFrame(self.root, width=1600, height=820, fg_color="#E8EBF2")
-        self.mainpage.place(x=0, y=80)
-
-    def show_support(self):
-        self.mainpage = ctk.CTkFrame(self.root, width=1600, height=820, fg_color="#E8EBF2")
-        self.mainpage.place(x=0, y=80)
-
-    def show_notifications(self):
-        self.mainpage = ctk.CTkFrame(self.root, width=1600, height=820, fg_color="#E8EBF2")
-        self.mainpage.place(x=0, y=80)
-
-    def show_profile(self):
-        self.mainpage = ctk.CTkFrame(self.root, width=1600, height=820, fg_color="#E8EBF2")
-        self.mainpage.place(x=0, y=80)
-
-    def show_settings(self):
-        self.mainpage = ctk.CTkFrame(self.root, width=1600, height=820, fg_color="#E8EBF2")
-        self.mainpage.place(x=0, y=80)
-    
 
 class AdminApp():
     def __init__(self):
@@ -367,5 +407,5 @@ class AdminApp():
         self.temp.place(x=0, y=30)
 
 #LoginApp()
-user = ("aricci",)
-DoctorApp(user)
+user = ("mrossi",)
+PatientApp(user)
