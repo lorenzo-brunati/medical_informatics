@@ -83,9 +83,10 @@ class DoctorApp():
         self.update_buttons("Dashboard")
 
     def switch_tab(self, tab):
+        self.tab = tab
         self.update_buttons(tab)
         if tab == "Appointments":
-            self.apppointments()
+            self.appointments()
         elif tab == "Patients":
             self.patients()
 
@@ -111,7 +112,7 @@ class DoctorApp():
     # ------ APPOINTMENTS ------
     # ==========================
     
-    def apppointments(self):
+    def appointments(self):
         self.clear_content_frame()
         
         self.manage = ctk.CTkFrame(self.main, corner_radius=20, fg_color=COLORS["bianco_puro"])
@@ -234,10 +235,15 @@ class DoctorApp():
 
             self.output_edit.configure(text=f"Appointment #{id} deleted", text_color=self.risk_code(4))
 
-            for widget in self.scrollable.winfo_children():
-                widget.destroy()
+            if self.tab == "Appointments":
+                for widget in self.scrollable.winfo_children():
+                    widget.destroy()
+                self.appointments()
 
-            self.show_incoming()
+            elif self.tab == "Patients":
+                for widget in self.calendar.winfo_children():
+                    widget.destroy()
+                self.pat_appointment()
 
         id, date, time, name, surname, code, report = app
 
@@ -301,13 +307,17 @@ class DoctorApp():
             self.conn.commit()
             # -- SEND NOTIFICATIONS ---
 
-
             self.output_edit.configure(text=f"Appointment #{id} updated", text_color=self.risk_code(1))
 
-            for widget in self.scrollable.winfo_children():
-                widget.destroy()
+            if self.tab == "Appointments":
+                for widget in self.scrollable.winfo_children():
+                    widget.destroy()
+                self.appointments()
 
-            self.show_incoming()
+            elif self.tab == "Patients":
+                for widget in self.calendar.winfo_children():
+                    widget.destroy()
+                self.pat_appointment()
 
     def new_appointment(self):
         self.text = ctk.CTkLabel(self.manage, text="Add Appointment", font=FONTS["titolo"], text_color=COLORS["testo_scuro"])
@@ -334,7 +344,7 @@ class DoctorApp():
         self.output_add = ctk.CTkLabel(row,text="", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"],width=200)
         self.output_add.grid(row=0, column=5, padx=15, pady=10, sticky="w")
 
-        save = ctk.CTkButton(row, text="Save", width=80, corner_radius=20, fg_color=COLORS["bottone_grigino"], text_color=COLORS["testo_scuro"], hover_color=self.risk_code(1),
+        save = ctk.CTkButton(row, text="Save", width=80, corner_radius=20, fg_color=COLORS["bottone_grigio"], text_color=COLORS["testo_scuro"], hover_color=self.risk_code(1),
                              command=lambda : self.add_appointment(entry_date.get(), entry_time.get(), entry_name.get(),entry_surname.get(),entry_report.get()))
         save.grid(row=0, column=6, padx=15, pady=10, sticky="e")
 
@@ -374,10 +384,15 @@ class DoctorApp():
         
         self.output_add.configure(text="New Appointment added", text_color=self.risk_code(1))
         
-        for widget in self.scrollable.winfo_children():
-            widget.destroy()
-            
-        self.show_incoming()
+        if self.tab == "Appointments":
+            for widget in self.scrollable.winfo_children():
+                widget.destroy()
+            self.show_incoming()
+        
+        elif self.tab == "Patients":
+            for widget in self.calendar.winfo_children():
+                widget.destroy()
+            self.pat_appointment()
 
     def add_appointment_popup(self, name, surname, code):
         self.edit_window = ctk.CTkToplevel(self.root)
@@ -484,6 +499,12 @@ class DoctorApp():
         return patients 
         
     def show_patient(self, id, name, surname, code):
+        
+        self.IDPat = id
+        self.name = name
+        self.surname = surname
+        self.code = code
+
         self.clear_content_frame()
 
         self.current = ctk.CTkFrame(self.main, corner_radius=20, fg_color=COLORS["bianco_puro"])
@@ -498,11 +519,11 @@ class DoctorApp():
         self.calendar = ctk.CTkFrame(self.main, corner_radius=20, fg_color=COLORS["bianco_puro"])
         self.calendar.place(relx=0.75, rely=0.81, relheight=0.16, relwidth=0.22)
 
-        self.pat_appointment(id, name, surname, code)
-        self.pat_therapy(id, code)
-        self.pat_vitals(id)
+        self.pat_appointment()
+        self.pat_therapy()
+        self.pat_vitals()
 
-    def pat_appointment(self, id, name, surname, code):
+    def pat_appointment(self):
         
         self.text = ctk.CTkLabel(self.calendar, text="Next Appointment", font=FONTS["titolo"], text_color=COLORS["testo_scuro"])
         self.text.place(x=30, y=25)
@@ -516,7 +537,7 @@ class DoctorApp():
                 # AND app.IDDoctor = ?
                 # #AND date > DATE('now')
         
-        self.cursor.execute(query, (id,))
+        self.cursor.execute(query, (self.IDPat,))
         app = self.cursor.fetchall()
 
         if app:
@@ -545,15 +566,16 @@ class DoctorApp():
 
             add = ctk.CTkButton(row, text="Add", width=50, corner_radius=20, text_color=COLORS["testo_scuro"], 
                                     fg_color=COLORS["bottone_grigio"], hover_color=self.risk_code(1),
-                                    command = lambda : self.add_appointment_popup(name, surname, code))
+                                    command = lambda : self.add_appointment_popup(self.name, self.surname, self.code))
             add.grid(row=0, column=1, padx=(0,15),pady=10,sticky="e")
 
-    def pat_therapy(self, id, code):
+    def pat_therapy(self):
+    
         query = """SELECT Date, Description FROM Therapy
                 WHERE IDPatient = ?
                 ORDER BY Date DESC LIMIT 1"""
 
-        self.cursor.execute(query, (id,))
+        self.cursor.execute(query, (self.IDPat,))
         current  = self.cursor.fetchall()[0]
 
         if current:
@@ -566,7 +588,7 @@ class DoctorApp():
         self.text = ctk.CTkLabel(self.therapy, text="Current Therapy", font=FONTS["titolo"], text_color=COLORS["testo_scuro"])
         self.text.place(x=30, y=25)
 
-        dot_code = ctk.CTkFrame(self.therapy, width=24, height=24, corner_radius=12, fg_color=self.risk_code(code))
+        dot_code = ctk.CTkFrame(self.therapy, width=24, height=24, corner_radius=12, fg_color=self.risk_code(self.code))
         dot_code.place(x=300, y=30)
                      
         lbl_date = ctk.CTkLabel(self.therapy, text="Modified on", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"])
@@ -588,10 +610,10 @@ class DoctorApp():
 
         edit = ctk.CTkButton(self.therapy, text="Edit", width=50, corner_radius=20, text_color=COLORS["testo_scuro"], 
                                     fg_color=COLORS["bottone_grigio"], hover_color=self.risk_code(1),
-                                    command = lambda id=id: self.edit_therapy(id, code))
+                                    command = lambda : self.edit_therapy())
         edit.place(x=280, y=340)
         
-    def edit_therapy(self, id, code):
+    def edit_therapy(self):
         self.edit_window = ctk.CTkToplevel(self.root)
         self.edit_window.geometry("400x500")
         self.edit_window.configure(fg_color=COLORS["bottone_grigio"])
@@ -599,7 +621,7 @@ class DoctorApp():
         title = ctk.CTkLabel(self.edit_window, text="Edit Therapy", font=FONTS["titolo"], text_color=COLORS["testo_scuro"])
         title.place(x=30, y=25)
 
-        dot_code = ctk.CTkFrame(self.edit_window, width=24, height=24, corner_radius=12, fg_color=self.risk_code(code))
+        dot_code = ctk.CTkFrame(self.edit_window, width=24, height=24, corner_radius=12, fg_color=self.risk_code(self.code))
         dot_code.place(x=346, y=30)
 
         today = datetime.today().strftime("%Y-%m-%d")       
@@ -617,10 +639,10 @@ class DoctorApp():
         self.output_add.place(x=50, y=415)
 
         save = ctk.CTkButton(self.edit_window, text="Add", width=100, corner_radius=20, fg_color=COLORS["bianco_puro"], text_color=COLORS["testo_scuro"], hover_color=self.risk_code(1),
-                             command=lambda: self.save_therapy(id, entry_data.cget("text"),entry_textbox.get("1.0", "end-1c")))
+                             command=lambda: self.save_therapy(entry_data.cget("text"),entry_textbox.get("1.0", "end-1c")))
         save.place(x=150, y = 450)
     
-    def save_therapy(self, id, date, description):
+    def save_therapy(self, date, description):
         description = description.strip()
     
         if not description:
@@ -630,14 +652,25 @@ class DoctorApp():
         query = """
         INSERT INTO Therapy (Date, Description, IDDoctor, IDPatient) 
         VALUES (?, ?, ?, ?)"""
-    
-        self.cursor.execute(query, (date, description, self.ID[0], id))
-        self.conn.commit()
-        
+        self.cursor.execute(query, (date, description, self.ID[0], self.IDPat))
+
+        try:
+            # Prova a cambiare self.ID[0] in self.ID se ti dà errore
+            self.cursor.execute(query, (date, description, self.ID[0], self.IDPat))
+            self.conn.commit()
+            print("Salvataggio completato con successo!")
+        except Exception as e:
+            print(f"Errore fatale di SQLite: {e}")      
+
         self.output_add.configure(text="New Therapy added!", text_color=self.risk_code(1))
+        
+        for widget in self.therapy.winfo_children():
+            widget.destroy()
 
+        self.pat_therapy()
 
-
+    def pat_vitals(self):
+        print("Ciao")
 
 
 
