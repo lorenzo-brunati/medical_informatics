@@ -6,9 +6,8 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 from tkinter import filedialog
+from PIL import Image
 
-# --- I MIEI COLORI ---
-# Li tengo qui così se mi stufo del blu cambio solo una riga
 COLORS = {
     "sfondo_grigino": "#E8EBF2",
     "bianco_puro": "#FFFFFF",
@@ -19,8 +18,6 @@ COLORS = {
     "bottone_grigio": "#DCE1E9"
 }
 
-# --- I MIEI FONT ---
-# Montserrat è ovunque, qui decido solo le grandezze
 FONTS = {
     "titolo": ("Montserrat", 22, "bold"),
     "sottotitolo": ("Montserrat", 16, "italic"),
@@ -38,6 +35,7 @@ UNITS = {
     "SPO2": "%",                 # Percentuale di ossigeno nel sangue
     "VO2max": "mL/kg/min"        # Millilitri di ossigeno per chilogrammo al minuto
 }
+
 class DoctorApp():
     def __init__(self, ID):
         
@@ -50,9 +48,30 @@ class DoctorApp():
 
         self.root.geometry("1600x900")
         
+        self.upload_icons()
+    
         self.setup_gui()
         self.root.mainloop()
-    
+
+    def upload_icons(self):
+        self.img_profile = ctk.CTkImage(
+            light_image=Image.open("icons/dark_user.png"),
+            dark_image=Image.open("icons/light_user.png"),
+            size=(24,24)
+        )
+        
+        self.img_notifications = ctk.CTkImage(
+            light_image=Image.open("icons/dark_bell.png"),
+            dark_image=Image.open("icons/light_bell.png"),
+            size=(24,24)
+        )
+        
+        self.img_support = ctk.CTkImage(
+            light_image=Image.open("icons/dark_bell.png"),
+            dark_image=Image.open("icons/light_bell.png"),
+            size=(24,24)
+        )        
+
     def setup_gui(self):
 
         self.topbar = ctk.CTkFrame(self.root, fg_color=COLORS["sfondo_grigino"])
@@ -63,6 +82,8 @@ class DoctorApp():
 
         self.welcome()
         self.nav_buttons()
+
+        self.dashboard()
 
     def clear_content_frame(self):
         for widget in self.main.winfo_children():
@@ -82,7 +103,7 @@ class DoctorApp():
     def nav_buttons(self):
 
         self.container = ctk.CTkFrame(self.topbar, fg_color="transparent")
-        self.container.place(relx=0.4, rely=0, relheight=1, relwidth=0.5)
+        self.container.place(relx=0.35, rely=0, relheight=1, relwidth=0.5)
 
         self.buttons_dict = {}
         buttons = ["Dashboard", "Patients", "Appointments"]
@@ -94,6 +115,20 @@ class DoctorApp():
             self.buttons_dict[b] = btn
         
         self.update_buttons("Dashboard")
+
+        self.icon_container = ctk.CTkFrame(self.topbar, fg_color="transparent")
+        self.icon_container.place(relx=0.98, rely=0.05, anchor="ne", relheight=0.8)
+
+        self.side_buttons()
+
+    def side_buttons(self):
+        self.btn_profile = ctk.CTkButton(self.icon_container, text="", image=self.img_profile, width=40, height=40, corner_radius=20, fg_color=COLORS["bottone_grigio"],
+                                         hover_color=COLORS["blu_acceso"], border_color=COLORS["bordi"], border_width=1, command=self.profile_popup)
+        self.btn_profile.pack(side="right", padx=6, pady=5)
+
+        self.btn_support = ctk.CTkButton(self.icon_container, text="", image=self.img_support, width=40, height=40, corner_radius=20, fg_color=COLORS["bottone_grigio"],
+                                         hover_color=COLORS["blu_acceso"], border_color=COLORS["bordi"], border_width=1, command=self.support_popup)
+        self.btn_support.pack(side="right", padx=6, pady=5)
 
     def switch_tab(self, tab):
         self.tab = tab
@@ -353,17 +388,15 @@ class DoctorApp():
         entry_surname = ctk.CTkEntry(row, corner_radius=5, placeholder_text="Surname", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"],fg_color=COLORS["bianco_puro"])
         entry_surname.grid(row=0, column=3, padx=15, pady=10, sticky="w")
         
-        entry_report = ctk.CTkEntry(row, corner_radius=5, placeholder_text="Notes", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"],fg_color=COLORS["bianco_puro"],width=400)
+        entry_report = ctk.CTkEntry(row, corner_radius=5, placeholder_text="Notes", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"],fg_color=COLORS["bianco_puro"], width=400)
         entry_report.grid(row=0, column=4, padx=15, pady=10, sticky="w")
 
-        self.output_add = ctk.CTkLabel(row,text="", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"],width=200)
+        self.output_add = ctk.CTkLabel(row,text="", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"], width=200)
         self.output_add.grid(row=0, column=5, padx=15, pady=10, sticky="w")
 
         save = ctk.CTkButton(row, text="Save", width=80, corner_radius=20, fg_color=COLORS["bottone_grigio"], text_color=COLORS["testo_scuro"], hover_color=self.risk_code(1),
                              command=lambda : self.add_appointment(entry_date.get(), entry_time.get(), entry_name.get(),entry_surname.get(),entry_report.get()))
         save.grid(row=0, column=6, padx=15, pady=10, sticky="e")
-
-        row.grid_columnconfigure(4, weigth=1)
 
     def add_appointment(self, date, time, name, surname, report):
         if not date or not time or not name or not surname:
@@ -492,19 +525,21 @@ class DoctorApp():
             label_date.grid(row=0,column=4, padx=15, pady=10, sticky="w")
 
             edit = ctk.CTkButton(row, text="Open", width=70, corner_radius=20, text_color=COLORS["testo_scuro"], 
-                                 fg_color=COLORS["bottone_grigio"], hover_color=self.risk_code(1),
+                                 fg_color=COLORS["bottone_grigio"], hover_color=self.risk_code(code),
                                  command = lambda id=id, n=name, s=surname, a=age, c=code: self.show_patient(id, n, s, a, c))
             edit.grid(row=0, column=5, padx=(15,5),pady=10,sticky="e")
 
             row.grid_columnconfigure(4, weight=1)
 
     def get_patients(self):
-        query = """SELECT user.ID, user.Name, user.Surname, pat.RiskCode, app.Date,
-                (strftime('%Y', 'now') - strftime('%Y', user.birthdate)) - 
-                (strftime('%m-%d', 'now') < strftime('%m-%d', user.birthdate)) AS Age
+        query = """SELECT user.ID, user.Name, user.Surname, pat.RiskCode, MIN(app.Date) AS NextAppointment,
+                (strftime('%Y', 'now') - strftime('%Y', user.birthdate)) - (strftime('%m-%d', 'now') < strftime('%m-%d', user.birthdate)) AS Age
                 FROM user JOIN Patient_ClinicalData AS pat ON user.ID = pat.IDPatient
-                LEFT JOIN Appointment AS app ON app.IDPatient = user.ID
-                ORDER BY app.Date ASC"""
+                LEFT JOIN Appointment AS app ON app.IDPatient = user.ID 
+                GROUP BY user.ID
+                ORDER BY NextAppointment ASC;"""
+
+                # AND app.Date >= DATE('now') -- Considera solo date future o odierne
                 # JOIN Doctor AS doc ON doc.IDPatient = pat.IDPatient
                 # WHERE doc.IDDoctor = ?
 
@@ -515,6 +550,8 @@ class DoctorApp():
         
     def show_patient(self, id, name, surname, age, code):
         
+        self.update_buttons("Patients")
+
         self.IDPat = id
         self.name = name
         self.surname = surname
@@ -786,7 +823,7 @@ class DoctorApp():
 
         check_out = ctk.CTkButton(row, text="Check-out", width=70, corner_radius=20, text_color=COLORS["testo_scuro"], 
                                  fg_color=COLORS["bottone_grigio"], hover_color=self.risk_code(self.code),
-                                 command = lambda : self.check_out())
+                                 command = lambda id = self.IDPat: self.check_out(id, self.name, self.surname, self.code))
         check_out.grid(row=0, column=7, padx=(5,5),pady=10,sticky="e")
 
         message = ctk.CTkButton(row, text="Message", width=70, corner_radius=20, text_color=COLORS["testo_scuro"], 
@@ -833,45 +870,93 @@ class DoctorApp():
 
     def get_vitals(self, start, end, vit):
         
-        """query = SELECT num.Date, num.Max, num.Min, num.Average, num.StandardDeviation
-                    FROM NumericalData AS num
-                    JOIN Data on num.IDNumData = IData
-                    WHERE data.IDPatient = ?
-                    AND data.NameData = ?
-                    AND num.Date BETWEEN ? AND ?
-                    ORDER BY num.Date ASC
-            
+        """query = SELECT num.Date, num.Max, num.Min, num.Average, num.StandardDeviation, num.DayTime
+                FROM NumericalData AS num
+                JOIN Data ON num.IDNumData = Data.IDData
+                WHERE data.IDPatient = ?
+                AND data.NameData = ?
+                AND num.Date BETWEEN ? AND ?
+                AND num.DayTime IN ('Day', 'Night')
+                ORDER BY num.Date ASC
+        
         self.cursor.execute(query, (self.IDPat, vit, start, end))
         records = self.cursor.fetchall()
 
-        dates =  [row[0] for row in records]
-        max = [row[1] for row in records]
-        min = [row[2] for row in records]
-        mean = [row[3] for row in records]
-        std = [row[4] for row in records]"""
-
-        dates = ["05-01", "05-02", "05-03", "05-04", "05-05", "05-06", "05-07", "05-08", "05-09", "05-10"]               
-        max = [36.5, 36.6, 36.8, 37.5, 38.4, 38.1, 37.4, 36.9, 36.6, 36.5]
-
-        min = [35.8, 35.9, 36.0, 36.2, 36.5, 36.4, 36.1, 35.9, 35.8, 35.7]
-        mean = [36.1, 36.2, 36.4, 36.8, 37.3, 37.1, 36.6, 36.3, 36.1, 36.0]
+        vitals = {
+            "Day":   {"dates": [], "max": [], "min": [], "mean": [], "std": []},
+            "Night": {"dates": [], "max": [], "min": [], "mean": [], "std": []}
+        }
         
-        self.plot_vitals(dates, mean, min, max, vit)
+        for row in records:
+            daytime = row[5] # 'Day' oppure 'Night'
+        
+            if daytime in vitals:
+                vitals[daytime]["dates"].append(row[0])
+                vitals[daytime]["max"].append(row[1])
+                vitals[daytime]["min"].append(row[2])
+                vitals[daytime]["mean"].append(row[3])
+                vitals[daytime]["std"].append(row[4])
+        """
+        
+        vitals = {
+            "Day": {
+                "dates": ["05-08", "05-09", "05-10", "05-11", "05-12", "05-13", "05-14", "05-15", "05-16", "05-17"],
+                "min": [65, 70, 62, 68, 72, 66, 64, 69, 71, 63],
+                "max": [95, 102, 90, 98, 108, 96, 93, 99, 105, 92],
+                "mean": [78, 82, 75, 80, 85, 79, 77, 81, 84, 76],
+                "std": [3.2, 4.1, 2.9, 3.5, 4.6, 3.1, 2.8, 3.7, 4.2, 3.0]
+            },
+            "Night": {
+                "dates": ["05-08", "05-09", "05-10", "05-11", "05-12", "05-13", "05-14", "05-15", "05-16", "05-17"],
+                "mean": [60, 58, 62, 59, 61, 57, 60, 63, 59, 58],
+                "min": [52, 50, 54, 51, 53, 49, 52, 55, 51, 50],
+                "max": [72, 70, 75, 71, 74, 69, 72, 76, 71, 70],
+                "std": [2.1, 1.8, 2.4, 1.9, 2.2, 1.7, 2.0, 2.5, 1.9, 1.8]
+            }
+        }
 
-    def plot_vitals(self, dates, mean, min, max, vit):
+        self.plot_vitals(vitals["Day"], vitals["Night"], vit)
+        
+    def plot_vitals(self, day, night, vit):
         for widget in self.plot_area.winfo_children():
             widget.destroy()
         
         self.output.destroy()
         self.output_date.destroy()
      
-        fig = Figure(figsize=(8.5,4), facecolor="none") 
+        self.btn_day = ctk.CTkButton(self.vitals, text="Day", width=50, corner_radius=20, hover_color=self.risk_code(self.code),
+                                     fg_color=self.risk_code(self.code), text_color=COLORS["bianco_puro"],command=lambda: self.update_vitals("Day", day, night, vit))
+        self.btn_day.place(x=35, y=70)
+
+        self.btn_night = ctk.CTkButton(self.vitals, text="Night", width=50, corner_radius=20, hover_color=self.risk_code(self.code),
+                                     fg_color=COLORS["bottone_grigio"], text_color=COLORS["bianco_puro"], command=lambda: self.update_vitals("Night", night, night, vit))
+        self.btn_night.place(x=95, y=70) 
+
+        self.update_vitals("Day", day, night, vit)
+    
+    def update_vitals(self, time, day, night, vit):
+        for widget in self.plot_area.winfo_children():
+            widget.destroy()
+
+        self.output.destroy()
+        self.output_date.destroy()
+
+        if time == "Day":
+            data = day
+            self.btn_day.configure(fg_color=self.risk_code(self.code), text_color=COLORS["bianco_puro"])
+            self.btn_night.configure(fg_color=COLORS["bottone_grigio"], text_color=COLORS["testo_scuro"])
+        elif time == "Night":
+            data = night
+            self.btn_day.configure(fg_color=COLORS["bottone_grigio"], text_color=COLORS["testo_scuro"])
+            self.btn_night.configure(fg_color=self.risk_code(self.code), text_color=COLORS["bianco_puro"])
+        
+        fig = Figure(figsize=(8.5, 4),facecolor="none") 
         
         ax = fig.add_subplot(111)       
         ax.set_facecolor("none")
-        
-        ax.plot(dates, mean, color=self.risk_code(self.code), linewidth=3, label="Mean")
-        ax.fill_between(dates, min, max, color=self.risk_code(self.code), alpha=0.2, edgecolor='none')
+
+        ax.plot(data["dates"], data["mean"], color=self.risk_code(self.code), linewidth=3)
+        ax.fill_between(data["dates"], data["min"], data["max"], color=self.risk_code(self.code), alpha=0.2, edgecolor='none')
         
         ax.tick_params(axis="x", colors=COLORS["testo_scuro"], labelsize=10, labelbottom=True)
         ax.tick_params(axis="y", colors=COLORS["testo_scuro"], labelsize=10)
@@ -886,6 +971,7 @@ class DoctorApp():
         ax.yaxis.grid(True, linestyle="--", alpha=0.3, color=COLORS["testo_scuro"])
         ax.set_axisbelow(True)
 
+        fig.tight_layout()
         fig.subplots_adjust(left=0.075, right=1, top=0.95, bottom=0.25)
 
         canvas = FigureCanvasTkAgg(fig, master=self.plot_area)
@@ -895,11 +981,11 @@ class DoctorApp():
         
         canvas.draw()
 
-        self.output = ctk.CTkLabel(self.vitals, text = f"Plotting {vit} [{UNITS[vit]}]", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"])
-        self.output.place(x=35, y=70)
+        self.output = ctk.CTkLabel(self.vitals, text = f"Plotting {time} {vit} [{UNITS[vit]}]", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"])
+        self.output.place(x=180, y=70)
 
-        self.output_date = ctk.CTkLabel(self.vitals, text = f"Recorded from {dates[0]} to {dates[-1]}", font=FONTS["sottotitolo"], text_color=COLORS["testo_chiaro"])
-        self.output_date.place(x=300, y=70)
+        self.output_date = ctk.CTkLabel(self.vitals, text = f"Recorded from {day['dates'][0]} to {day['dates'][-1]}", font=FONTS["sottotitolo"], text_color=COLORS["testo_chiaro"])
+        self.output_date.place(x=465, y=70)
 
     def add_ecg(self):
         date_list = ["none","2026-05-05"]
@@ -988,10 +1074,10 @@ class DoctorApp():
         self.output.place(x=35, y=70)
 
         self.output_date = ctk.CTkLabel(self.vitals, text = f"Recorded on {date}", font=FONTS["sottotitolo"], text_color=COLORS["testo_chiaro"])
-        self.output_date.place(x=300, y=70)
+        self.output_date.place(x=240, y=70)
 
     # ===========================
-    # -------- DASHBOARD --------
+    # ---------- EXTRA ----------
     # ===========================
 
     def message(self):
@@ -1036,7 +1122,7 @@ class DoctorApp():
     def send_message(self, date, time, msg):
         self.output_add.configure(text="Function still to be written", text_color=self.risk_code(4))
 
-    def check_out(self):
+    def check_out(self, id, name, surname, code):
         self.edit_window = ctk.CTkToplevel(self.root)
         self.edit_window.geometry("400x420")
         self.edit_window.configure(fg_color=COLORS["bottone_grigio"])
@@ -1046,12 +1132,12 @@ class DoctorApp():
         title = ctk.CTkLabel(self.edit_window, text="Medical Examination", font=FONTS["titolo"], text_color=COLORS["testo_scuro"])
         title.place(x=30, y=25)
 
-        dot_code = ctk.CTkFrame(self.edit_window, width=24, height=24, corner_radius=12, fg_color=self.risk_code(self.code))
+        dot_code = ctk.CTkFrame(self.edit_window, width=24, height=24, corner_radius=12, fg_color=self.risk_code(code))
         dot_code.place(x=346, y=30)
                      
         lbl_name = ctk.CTkLabel(self.edit_window, text="Patient", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"])
         lbl_name.place(x=30, y=80, anchor="w")
-        entry_name = ctk.CTkLabel(self.edit_window, corner_radius=5, text=f" {self.name} {self.surname}", anchor="w", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"],fg_color=COLORS["bianco_puro"], width=340)
+        entry_name = ctk.CTkLabel(self.edit_window, corner_radius=5, text=f" {name} {surname}", anchor="w", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"],fg_color=COLORS["bianco_puro"], width=340)
         entry_name.place(x=30, y=95)
 
         lbl_date = ctk.CTkLabel(self.edit_window, text="Date", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"])
@@ -1068,7 +1154,7 @@ class DoctorApp():
         self.lbl_report = ctk.CTkLabel(self.edit_window, text="Add Report", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"])
         self.lbl_report.place(x=30, y=305, anchor="w")
 
-        add = ctk.CTkButton(self.edit_window, text="Upload File", width=150, corner_radius=20, fg_color=COLORS["bianco_puro"], text_color=COLORS["testo_scuro"], hover_color=self.risk_code(self.code),
+        add = ctk.CTkButton(self.edit_window, text="Upload File", width=150, corner_radius=20, fg_color=COLORS["bianco_puro"], text_color=COLORS["testo_scuro"], hover_color=self.risk_code(code),
                              command=lambda: self.upload_file())
         
         add.place(x=220, y=290)
@@ -1076,7 +1162,7 @@ class DoctorApp():
         self.output_add = ctk.CTkLabel(self.edit_window, width=300,text="", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"])
         self.output_add.place(x=50, y=330)
 
-        save = ctk.CTkButton(self.edit_window, text="Save", width=100, corner_radius=20, fg_color=COLORS["bianco_puro"], text_color=COLORS["testo_scuro"], hover_color=self.risk_code(self.code),
+        save = ctk.CTkButton(self.edit_window, text="Save", width=100, corner_radius=20, fg_color=COLORS["bianco_puro"], text_color=COLORS["testo_scuro"], hover_color=self.risk_code(code),
                              command=lambda: self.save_report(date, entry_notes.get()))
         save.place(x=150, y = 370)
 
@@ -1095,6 +1181,349 @@ class DoctorApp():
 
     def download_report(self, id):
         print("Function still to be written")
+
+    def support_popup(self):
+        self.btn_support.configure(fg_color=COLORS["blu_acceso"], image=ctk.CTkImage(Image.open("icons/light_bell.png"), size=(24,24)))
+
+        self.edit_window = ctk.CTkToplevel(self.root)
+        self.edit_window.geometry("400x480")
+        self.edit_window.configure(fg_color=COLORS["bottone_grigio"])
+
+        def on_close_popup():
+            self.btn_support.configure(fg_color=COLORS["bottone_grigio"],image=self.img_support)
+            self.edit_window.destroy()
+
+        self.edit_window.protocol("WM_DELETE_WINDOW", on_close_popup)
+
+        date = f"{datetime.today()}"[:10]
+
+        title = ctk.CTkLabel(self.edit_window, text="Support Request", font=FONTS["titolo"], text_color=COLORS["testo_scuro"])
+        title.place(x=30, y=25)
+             
+        lbl_date = ctk.CTkLabel(self.edit_window, text="Date", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"])
+        lbl_date.place(x=30, y=80, anchor="w")
+        entry_data = ctk.CTkLabel(self.edit_window, corner_radius=5, width=340,font=FONTS["testo_normale"], anchor="w", text=f" {date}",text_color=COLORS["testo_scuro"], fg_color=COLORS["bianco_puro"])
+        entry_data.place(x=30, y=95)
+
+        options = ["Wearable", "Appointments", "Patients"]
+        lbl_type = ctk.CTkLabel(self.edit_window, text="Request Type", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"])
+        lbl_type.place(x=30, y=150, anchor="w")
+        menu = ctk.CTkOptionMenu(self.edit_window, width=340, values=options,fg_color=COLORS["bianco_puro"], font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"], button_color=COLORS["bianco_puro"],button_hover_color=COLORS["blu_acceso"])
+        menu.place(x=30, y=165)
+        
+        lbl_notes = ctk.CTkLabel(self.edit_window, text="Message", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"])
+        lbl_notes.place(x=30, y=220, anchor="w")
+
+        entry_textbox = ctk.CTkTextbox(self.edit_window, width=340, height=150, corner_radius=5, 
+                                       font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"], fg_color=COLORS["bianco_puro"], wrap="word")
+        entry_textbox.place(x=30, y=235)
+
+        self.output_add = ctk.CTkLabel(self.edit_window, width=300,text="", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"])
+        self.output_add.place(x=50, y=400)
+
+        save = ctk.CTkButton(self.edit_window, text="Send", width=100, corner_radius=20, fg_color=COLORS["bianco_puro"], text_color=COLORS["testo_scuro"], hover_color=COLORS["blu_acceso"],
+                             command=lambda: self.send_request(entry_data.cget("text"),entry_textbox.get("1.0", "end-1c")))
+        save.place(x=150, y = 430)
+
+    def send_request(self, date, msg):
+        self.output_add.configure(text="Functions still to be implemented", text_color=self.risk_code(4))
+
+    def profile_popup(self):
+        self.btn_profile.configure(fg_color=COLORS["blu_acceso"], image=ctk.CTkImage(Image.open("icons/light_user.png"), size=(24,24)))
+
+        self.edit_window = ctk.CTkToplevel(self.root)
+        self.edit_window.geometry("400x500")
+        self.edit_window.configure(fg_color=COLORS["bottone_grigio"])
+
+        def on_close_popup():
+            self.btn_profile.configure(fg_color=COLORS["bottone_grigio"],image=self.img_profile)
+            self.edit_window.destroy()
+
+        self.edit_window.protocol("WM_DELETE_WINDOW", on_close_popup)
+
+        title = ctk.CTkLabel(self.edit_window, text="Profile", font=FONTS["titolo"], text_color=COLORS["testo_scuro"])
+        title.place(x=30, y=25)
+
+    # ===========================
+    # -------- DASHBOARD --------
+    # ===========================
+
+    def dashboard(self):
+        self.clear_content_frame()
+
+        self.todays = ctk.CTkFrame(self.main, corner_radius=20, fg_color=COLORS["bianco_puro"])
+        self.todays.place(relx=0.03, rely=0.03, relheight=0.4, relwidth=0.6)
+
+        self.critical = ctk.CTkFrame(self.main, corner_radius=20, fg_color=COLORS["bianco_puro"])
+        self.critical.place(relx=0.03, rely=0.5, relheight=0.47, relwidth=0.6)
+        
+        self.messages = ctk.CTkFrame(self.main, corner_radius=20, fg_color=COLORS["bianco_puro"])
+        self.messages.place(relx=0.66, rely=0.03, relheight=0.94, relwidth=0.31)
+
+        self.show_today()
+        self.show_critical()
+        self.show_messages()
+    
+    def show_today(self):
+        self.text = ctk.CTkLabel(self.todays, text="Today's Appointments", font=FONTS["titolo"], text_color=COLORS["testo_scuro"])
+        self.text.place(x=30, y=25)
+        
+        self.scrollable = ctk.CTkScrollableFrame(self.todays, fg_color="transparent")
+        self.scrollable.place(x=0, rely=0.2, relheight=0.75, relwidth=0.98)
+        
+        appointments = self.get_todays_appointments()
+        for app in appointments:
+            id, IDPat, date, time, name, surname, code, report, age = app
+            row = ctk.CTkFrame(self.scrollable, fg_color="transparent")
+            row.pack(fill='x',padx=20, pady=0)
+
+            label_date = ctk.CTkLabel(row, text=f"{time}", font=FONTS["sottotitolo"], text_color=COLORS["testo_chiaro"])
+            label_date.grid(row=0,column=0, padx=15, pady=10, sticky="w")
+
+            dot_code = ctk.CTkFrame(row, width=12, height=12, corner_radius=6, fg_color=self.risk_code(code))
+            dot_code.grid(row=0,column=1, padx=15, pady=10, sticky="ew")
+
+            label_name = ctk.CTkLabel(row, text=name, font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"],width=75, anchor="w")
+            label_name.grid(row=0,column=2, padx=15, pady=10, sticky="w")
+
+            label_surname = ctk.CTkLabel(row, text=surname, font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"],width=75, anchor="w")
+            label_surname.grid(row=0,column=3, padx=15, pady=10, sticky="w")
+
+            label_report = ctk.CTkLabel(row, text=report, font=FONTS["sottotitolo"], text_color=COLORS["testo_chiaro"])
+            label_report.grid(row=0,column=4, padx=15, pady=10, sticky="w")
+
+            check_out = ctk.CTkButton(row, text="Check-out", width=70, corner_radius=20, text_color=COLORS["testo_scuro"], 
+                                fg_color=COLORS["bottone_grigio"], hover_color=self.risk_code(code),
+                                command = lambda id = IDPat, n = name, s = surname, c = code: self.check_out(id, n, s, c))
+            check_out.grid(row=0, column=5, padx=(15,5),pady=10,sticky="e")
+
+            edit = ctk.CTkButton(row, text="Open", width=70, corner_radius=20, text_color=COLORS["testo_scuro"], 
+                                fg_color=COLORS["bottone_grigio"], hover_color=self.risk_code(code),
+                                command = lambda id=IDPat, n=name, s=surname, a=age, c=code: self.show_patient(id, n, s, a, c))
+            edit.grid(row=0, column=6, padx=(15,5),pady=10,sticky="e")
+
+            row.grid_columnconfigure(4, weight=1)
+
+    def get_todays_appointments(self):
+        query = """
+                SELECT app.IDAppointment, pat.IDPatient, app.Date, app.Time, user.Name, user.Surname, pat.RiskCode, app.Report,
+                (strftime('%Y', 'now') - strftime('%Y', user.birthdate)) - (strftime('%m-%d', 'now') < strftime('%m-%d', user.birthdate)) AS Age
+                FROM Appointment AS app
+                JOIN Patient_ClinicalData AS pat ON app.IDPatient = pat.IDPatient
+                JOIN User ON app.IDPatient = user.ID
+                WHERE app.Date = DATE('now')
+                ORDER BY Date, Time ASC"""
+               # WHERE app.IDDoctor = ?"""         
+
+        self.cursor.execute(query)
+        return self.cursor.fetchall()
+
+    def show_critical(self):
+        self.text = ctk.CTkLabel(self.critical, text="Critical Patients", font=FONTS["titolo"], text_color=COLORS["testo_scuro"])
+        self.text.place(x=30, y=25)
+        
+        self.scrollable = ctk.CTkScrollableFrame(self.critical, fg_color="transparent")
+        self.scrollable.place(x=0, rely=0.2, relheight=0.75, relwidth=0.98)
+        
+        patients = self.get_critical()
+        for pat in patients:
+            id, name, surname, code, appdate, age = pat
+            
+            row = ctk.CTkFrame(self.scrollable, fg_color="transparent")
+            row.pack(fill='x',padx=20, pady=0)
+
+            label_name = ctk.CTkLabel(row, text=name, font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"],width=75, anchor="w")
+            label_name.grid(row=0,column=1, padx=15, pady=10, sticky="w")
+
+            label_surname = ctk.CTkLabel(row, text=surname, font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"],width=75, anchor="w")
+            label_surname.grid(row=0,column=2, padx=15, pady=10, sticky="w")
+
+            label_age = ctk.CTkLabel(row, text=f"Age: {age}", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"],width=75, anchor="w")
+            label_age.grid(row=0,column=3, padx=15, pady=10, sticky="w")
+
+            dot_code = ctk.CTkFrame(row, width=12, height=12, corner_radius=6, fg_color=self.risk_code(code))
+            dot_code.grid(row=0,column=0, padx=15, pady=10, sticky="ew")
+
+            label_date = ctk.CTkLabel(row, text=f"Next Appointment: {appdate}", font=FONTS["sottotitolo"], text_color=COLORS["testo_chiaro"])
+            label_date.grid(row=0,column=4, padx=15, pady=10, sticky="w")
+
+            edit = ctk.CTkButton(row, text="Open", width=70, corner_radius=20, text_color=COLORS["testo_scuro"], 
+                                 fg_color=COLORS["bottone_grigio"], hover_color=self.risk_code(code),
+                                 command = lambda id=id, n=name, s=surname, a=age, c=code: self.show_patient(id, n, s, a, c))
+            edit.grid(row=0, column=5, padx=(15,5),pady=10,sticky="e")
+
+            row.grid_columnconfigure(4, weight=1)
+
+    def get_critical(self):
+        query = """SELECT user.ID, user.Name, user.Surname, pat.RiskCode, MIN(app.Date) AS NextAppointment,
+                (strftime('%Y', 'now') - strftime('%Y', user.birthdate)) - (strftime('%m-%d', 'now') < strftime('%m-%d', user.birthdate)) AS Age
+                FROM user JOIN Patient_ClinicalData AS pat ON user.ID = pat.IDPatient
+                LEFT JOIN Appointment AS app ON app.IDPatient = user.ID
+                WHERE pat.RiskCode = 4 
+                GROUP BY user.ID
+                ORDER BY NextAppointment ASC;"""
+
+                # AND app.Date >= DATE('now') -- Considera solo date future o odierne
+                # JOIN Doctor AS doc ON doc.IDPatient = pat.IDPatient
+                # WHERE doc.IDDoctor = ?
+
+        self.cursor.execute(query)
+        patients = self.cursor.fetchall()
+
+        return patients  
+
+    def show_messages(self):
+        self.text = ctk.CTkLabel(self.messages, text="Recent Messages", font=FONTS["titolo"], text_color=COLORS["testo_scuro"])
+        self.text.place(x=30, y=25)
+        
+        view = ctk.CTkButton(self.messages, text="View all", width=70, corner_radius=20, text_color=COLORS["testo_scuro"], 
+                                 fg_color=COLORS["bottone_grigio"], hover_color=COLORS["blu_acceso"],
+                                 command = lambda : self.view_all())
+        view.place(x=375, y=30)
+        
+        self.scrollable = ctk.CTkScrollableFrame(self.messages, fg_color="transparent")
+        self.scrollable.place(x=0, rely=0.1, relheight=0.85, relwidth=0.98)
+        
+        messages = self.get_messages()
+        for msg in messages:
+            id, name, surname, code, text, date, time = msg
+            
+            row = ctk.CTkFrame(self.scrollable, fg_color="transparent")
+            row.pack(fill='x',padx=20, pady=0)
+
+            label_name = ctk.CTkLabel(row, text=name, font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"],width=75, anchor="w")
+            label_name.grid(row=0,column=1, padx=5, pady=10, sticky="w")
+
+            label_surname = ctk.CTkLabel(row, text=surname, font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"],width=75, anchor="w")
+            label_surname.grid(row=0,column=2, padx=5, pady=10, sticky="w")
+
+            dot_code = ctk.CTkFrame(row, width=12, height=12, corner_radius=6, fg_color=self.risk_code(code))
+            dot_code.grid(row=0,column=0, padx=15, pady=10, sticky="ew")
+
+            label_text = ctk.CTkLabel(row, text=f"{text[:10]}...", font=FONTS["sottotitolo"], text_color=COLORS["testo_chiaro"])
+            label_text.grid(row=0,column=3, padx=10, pady=10, sticky="w")
+
+            edit = ctk.CTkButton(row, text="View", width=70, corner_radius=20, text_color=COLORS["testo_scuro"], 
+                                 fg_color=COLORS["bottone_grigio"], hover_color=self.risk_code(code),
+                                 command = lambda id=id : self.view_message(id, name, surname, code, text, date, time))
+            edit.grid(row=0, column=4, padx=(15,5),pady=10,sticky="e")
+
+            row.grid_columnconfigure(3, weight=1)
+
+    def get_messages(self):
+        msg = [(1, "Mario", "Rossi", 2, "Dear Doctor Ricci", "2026-05-17", "11:36")]
+        return msg
+
+    def view_message(self, id, name, surname, code, text, date, time):
+        
+        self.name = name
+        self.surname = surname
+        self.code = code
+
+        self.edit_window = ctk.CTkToplevel(self.root)
+        self.edit_window.geometry("400x520")
+        self.edit_window.configure(fg_color=COLORS["bottone_grigio"])
+
+        title = ctk.CTkLabel(self.edit_window, text="Message", font=FONTS["titolo"], text_color=COLORS["testo_scuro"])
+        title.place(x=30, y=25)
+
+        dot_code = ctk.CTkFrame(self.edit_window, width=24, height=24, corner_radius=12, fg_color=self.risk_code(code))
+        dot_code.place(x=346, y=30)
+                     
+        lbl_name = ctk.CTkLabel(self.edit_window, text="Message from", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"])
+        lbl_name.place(x=30, y=80, anchor="w")
+        entry_name = ctk.CTkLabel(self.edit_window, corner_radius=5, text=f" {name} {surname}", anchor="w", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"],fg_color=COLORS["bianco_puro"], width=340)
+        entry_name.place(x=30, y=95)
+
+        lbl_date = ctk.CTkLabel(self.edit_window, text="Date - Time", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"])
+        lbl_date.place(x=30, y=150, anchor="w")
+        entry_data = ctk.CTkLabel(self.edit_window, width=340,font=FONTS["testo_normale"], anchor="w", text=f" {date} - {time}",text_color=COLORS["testo_scuro"], fg_color=COLORS["bianco_puro"])
+        entry_data.place(x=30, y=165)
+
+        lbl_notes = ctk.CTkLabel(self.edit_window, text="Message", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"])
+        lbl_notes.place(x=30, y=220, anchor="w")
+        
+        entry_textbox = ctk.CTkTextbox(self.edit_window, width=340, height=180, corner_radius=5, 
+                                       font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"], fg_color=COLORS["bianco_puro"], wrap="word")
+        entry_textbox.place(x=30, y=235)
+        entry_textbox.configure(state="normal")
+        entry_textbox.delete("1.0", "end")
+        entry_textbox.insert("0.0", text)
+
+        self.output_add = ctk.CTkLabel(self.edit_window, width=300,text="", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"])
+        self.output_add.place(x=50, y=430)
+
+        reply = ctk.CTkButton(self.edit_window, text="Reply", width=100, corner_radius=20, fg_color=COLORS["bianco_puro"], text_color=COLORS["testo_scuro"], hover_color=self.risk_code(self.code),
+                             command=lambda: self.message())
+        
+        reply.place(x=95, y = 470)
+
+        read = ctk.CTkButton(self.edit_window, text="Read", width=100, corner_radius=20, fg_color=COLORS["bianco_puro"], text_color=COLORS["testo_scuro"], hover_color=self.risk_code(self.code),
+                             command=lambda: self.read_message(id))
+        
+        read.place(x=205, y = 470)
+
+    def read_message(self, id):
+        self.output_add.configure(text="Functions still to be implemented", text_color=self.risk_code(4))
+
+    def view_all(self):
+        self.clear_content_frame()
+
+        self.all_msg = ctk.CTkFrame(self.main, corner_radius=20, fg_color=COLORS["bianco_puro"])
+        self.all_msg.place(relx=0.03, rely=0.03, relheight=0.94, relwidth=0.94)
+
+        self.text = ctk.CTkLabel(self.all_msg, text="Incoming Messages", font=FONTS["titolo"], text_color=COLORS["testo_scuro"])
+        self.text.place(x=30, y=25)
+        
+        self.scrollable = ctk.CTkScrollableFrame(self.all_msg, fg_color="transparent")
+        self.scrollable.place(x=0, rely=0.1, relheight=0.85, relwidth=1)
+        
+        msg = self.get_all_messages()
+        for m in msg:
+            id, name, surname, code, text, date, time, read = m
+            
+            row = ctk.CTkFrame(self.scrollable, fg_color="transparent")
+            row.pack(fill='x',padx=20, pady=0)
+
+            label_name = ctk.CTkLabel(row, text=name, font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"],width=75, anchor="w")
+            label_name.grid(row=0,column=1, padx=15, pady=10, sticky="w")
+
+            label_surname = ctk.CTkLabel(row, text=surname, font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"],width=75, anchor="w")
+            label_surname.grid(row=0,column=2, padx=15, pady=10, sticky="w")
+            
+            dot_container = ctk.CTkFrame(row, width=30, height=30, fg_color="transparent")
+            dot_container.grid(row=0, column=0, padx=15, pady=10, sticky="w")
+            dot_container.grid_propagate(False)
+
+            size = 12 if read else 24
+            
+            dot_code = ctk.CTkFrame(dot_container, width=size, height=size, corner_radius=size // 2, fg_color=self.risk_code(code))
+            dot_code.place(relx=0.5, rely=0.5, anchor="center")
+
+            label_date = ctk.CTkLabel(row, text=f"{date} - {time}", font=FONTS["sottotitolo"], text_color=COLORS["testo_chiaro"])
+            label_date.grid(row=0,column=4, padx=15, pady=10, sticky="w")
+
+            label_text = ctk.CTkLabel(row, text=f"{text[:10]}...", font=FONTS["sottotitolo"], text_color=COLORS["testo_chiaro"])
+            label_text.grid(row=0,column=5, padx=10, pady=10, sticky="w")
+
+            edit = ctk.CTkButton(row, text="View", width=70, corner_radius=20, text_color=COLORS["testo_scuro"], 
+                                 fg_color=COLORS["bottone_grigio"], hover_color=self.risk_code(code),
+                                 command = lambda id=id, n=name, s=surname, c=code, tx=text, d=date, t=time: self.view_message(id, n, s, c, tx, d, t))
+            edit.grid(row=0, column=6, padx=(15,5),pady=10,sticky="e")
+
+            row.grid_columnconfigure(5, weight=1)
+
+    def get_all_messages(self):
+        test_messages = [
+            (1, "Marco", "Rossi", 4, "Rilevata aritmia severa durante il monitoraggio pomeridiano. Richiesto controllo urgente.", "2026-05-17", "16:45", 0),
+            (2, "Giulia", "Bianchi", 2, "Il paziente ha dimenticato di registrare la pressione arteriosa questa mattina.", "2026-05-17", "12:30", 1),
+            (3, "Luca", "Verdi", 4, "Picco pressorio sistolico (175 mmHg) registrato dal dispositivo indossabile.", "2026-05-17", "18:15", 0),
+            (4, "Anna", "Ferrari", 1, "Richiesta di spostamento appuntamento per la prossima settimana.", "2026-05-16", "09:15", 1),
+            (5, "Roberto", "Russo", 3, "Saturazione dell'ossigeno in calo stabile sotto il 92% nelle ultime 3 ore.", "2026-05-17", "14:20", 0),
+            (6, "Elena", "Romano", 2, "Glicemia a digiuno leggermente sopra la norma (130 mg/dL).", "2026-05-16", "08:00", 1)
+        ]
+
+        return test_messages
 
 ID = (11,)
 DoctorApp(ID)
