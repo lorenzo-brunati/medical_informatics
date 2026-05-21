@@ -216,7 +216,7 @@ class PatientApp():
         self.icon_notif_light = ctk.CTkImage(light_image=PIL.Image.open("icons/light_bell.png"), size=(24, 24))
         self.icon_profile_light = ctk.CTkImage(light_image=PIL.Image.open("icons/light_user.png"), size=(20, 20))
 
-    # --- FUNZIONE PER PESCARE I DATI DAL DB ---
+    #FUNZIONE PER PESCARE I DATI DAL DB
     def recupera_info_db(self):
         # Prendo l'ID del paziente
         self.cursor.execute("SELECT Id FROM USER WHERE Username = ?", self.user)
@@ -384,7 +384,6 @@ class PatientApp():
             self.profile_buttons[opzione] = btn
             btn.pack(pady=(24,0), anchor="w") if i ==0 else  btn.pack(pady=0, anchor="w")
     
-
     def cambia_pagina_profilo(self, nome):
         # Questa funzione è chiamata quando clicco su una voce del menu del profilo
         if self.profile_page_frame:
@@ -476,7 +475,6 @@ class PatientApp():
                     command=lambda campo_nome=campo["lbl"], campo_val=campo["val"]: self.apri_popup_modifica(campo_nome, campo_val)
                 )
                 btn_profile_edit.place(relx=0.98, rely=0.69, anchor="e")
-
 
     def apri_popup_modifica(self, nome_campo, valore_attuale):
         popup = ctk.CTkToplevel(self.root, fg_color=COLORS["sfondo_grigino"])
@@ -616,6 +614,8 @@ class PatientApp():
         save_btn = ctk.CTkButton(popup, text="Save", font=FONTS["testo_bold"], fg_color=COLORS["blu_acceso"], command=salva_modifica)
         save_btn.pack(pady=(0,10))
         
+    def mostra_dati(self):
+        # Questa funzione mostra i dati del paziente, per ora è un placeholder che mostra solo un testo, ma in futuro si può espandere per mostrare grafici, tabelle, ecc.     
     def mostra_placeholder(self, nome):
         ctk.CTkLabel(self.current_page_frame, text=f"{nome} page content goes here.", font=FONTS["testo_bold"], text_color=COLORS["testo_scuro"]).place(relx=0.5, rely=0.5, anchor="center")
 
