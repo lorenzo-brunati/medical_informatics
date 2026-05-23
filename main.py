@@ -1,6 +1,13 @@
-import sqlite3 as sql
 import customtkinter as ctk
-import PIL.Image
+import sqlite3 as sql
+
+from datetime import datetime
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.figure import Figure
+from tkinter import filedialog
+import PIL
+import struct
 
 # --- I MIEI COLORI ---
 # Li tengo qui così se mi stufo del blu cambio solo una riga
@@ -25,6 +32,16 @@ FONTS = {
     "micro_bold": ("Montserrat", 8, "bold")
 }
 
+# --- UNITA DI MISURA PER I DATI NUMERICI ---
+UNITS = {
+    "Systolic BP": "mmHg",       # Millimetri di mercurio
+    "Diastolic BP": "mmHg",      # Millimetri di mercurio
+    "Heart Rate": "bpm",         # Battiti al minuto
+    "Step Count": "steps",       # Conteggio passi
+    "Sleep Hours": "hours",        # Ore di sonno
+    "SPO2": "%",                 # Percentuale di ossigeno nel sangue
+    "VO2max": "mL/kg/min"        # Millilitri di ossigeno per chilogrammo al minuto
+}
 
 class LoginApp():
     def __init__(self): # Runs only ONCE
@@ -201,6 +218,32 @@ class PatientApp():
         self.current_page_frame = None
         self.profile_page_frame = None
 
+        # Recupero le informazioni personali dal database
+        self.cursor.execute("SELECT Id, Name, Surname, BirthDate, Address, PhoneNumber, Email, Username, Password, FiscalCode FROM user WHERE username = ?", (self.user[0],))
+        self.user_data = self.cursor.fetchone()
+
+        self.p_id = self.user_data[0]
+        self.patient_name = self.user_data[1]
+        self.patient_surname = self.user_data[2]
+        self.patient_birthdate = self.user_data[3]
+
+        self.doctor = self.get_doctor()
+        self.doctor_name = self.doctor[0]
+        self.doctor_surname = self.doctor[1]
+        self.doctor_id = self.doctor[2]
+
+        # Recupero peso e altezza del paziente
+        query = """
+                    SELECT Height, Weigth
+                    FROM PATIENT_CLINICALDATA
+                    WHERE IdPatient = ?
+                """
+        
+        self.cursor.execute(query, self.p_id)
+        clinical = self.cursor.fetchall()[0]
+        self.patient_height = clinical[0]
+        self.patient_weight = clinical[1]
+
         # Carico le icone e poi costruisco la grafica
         self.carica_icone()
         self.setup_gui()
@@ -215,43 +258,6 @@ class PatientApp():
         # Versione chiara per quando il tasto diventa blu/scuro
         self.icon_notif_light = ctk.CTkImage(light_image=PIL.Image.open("icons/light_bell.png"), size=(24, 24))
         self.icon_profile_light = ctk.CTkImage(light_image=PIL.Image.open("icons/light_user.png"), size=(20, 20))
-
-    #FUNZIONE PER PESCARE I DATI DAL DB
-    def recupera_info_db(self):
-        # Prendo l'ID del paziente
-        self.cursor.execute("SELECT Id FROM USER WHERE Username = ?", self.user)
-        user_row = self.cursor.fetchone()
-        if not user_row: return None
-        p_id = user_row[0]
-
-        # Funzioncina interna per non ripetere la query chilometrica dei dati numerici
-        def get_latest(metrica):
-            self.cursor.execute("""
-                SELECT N.Mean FROM DATA D 
-                JOIN NUMERICAL_DATA N ON D.IdData = N.IdNumData 
-                WHERE D.IdPatient = ? AND D.NameData = ? 
-                ORDER BY D.Date DESC LIMIT 1
-            """, (p_id, metrica))
-            res = self.cursor.fetchone()
-            return f"{res[0]:.1f}" if res else "--"
-
-        # Recupero la terapia
-        self.cursor.execute("SELECT Description FROM THERAPY WHERE IdPatient = ? ORDER BY Date DESC LIMIT 1", (p_id,))
-        terapia = (self.cursor.fetchone() or ["No active therapy."])[0]
-
-        # Recupero l'appuntamento
-        self.cursor.execute("SELECT Date, Time FROM APPOINTMENT WHERE IdPatient = ? ORDER BY Date ASC LIMIT 1", (p_id,))
-        app_res = self.cursor.fetchone()
-        appuntamento = f"{app_res[0]} at {app_res[1]}" if app_res else "No upcoming appointments."
-
-        # Impacchetto tutto e lo spedisco alla dashboard
-        return {
-            "vitals": f"SBP: {get_latest('SBP')} mmHg\n\nDBP: {get_latest('DBP')} mmHg\n\nHR: {get_latest('HR')} bpm",
-            "fitness": f"VO2 Max: {get_latest('VO2Max')}\n\nSpO2: {get_latest('SPO2')} %",
-            "activity": f"Sleep: {get_latest('SleepHours')} h\n\nSteps: {get_latest('StepCount')}",
-            "therapy": terapia,
-            "appointment": appuntamento
-        }
 
     def setup_gui(self):
         # La barra in alto grigia
@@ -337,7 +343,7 @@ class PatientApp():
             self.mostra_dashboard()
 
         elif nome == "Data":
-            self.mostra_placeholder(nome)
+            self.mostra_dati()
 
         elif nome == "Appointments":
             self.mostra_placeholder(nome)
@@ -345,8 +351,9 @@ class PatientApp():
         elif nome == "Support":
             self.mostra_placeholder(nome)
 
+    #DASHBOARD
     def mostra_dashboard(self):
-        dati = self.recupera_info_db()
+        dati = self.recupera_latest_data_db()
 
         # Funzione helper interna per non ripetere 100 volte i parametri dei pannelli bianchi
         def aggiungi_pannello(x, y, w, h, titolo, info):
@@ -366,9 +373,45 @@ class PatientApp():
         aggiungi_pannello(0.34, 0.52, 0.28, 0.42, "ECG:", "Signal data recorded.")
 
         # Colonna 3
-        aggiungi_pannello(0.66, 0.05, 0.30, 0.58, "Therapy", dati["therapy"])
-        aggiungi_pannello(0.66, 0.68, 0.30, 0.26, "Next Appointment", dati["appointment"])
+        aggiungi_pannello(0.66, 0.05, 0.30, 0.58, "Therapy", dati["active therapy"])
+        aggiungi_pannello(0.66, 0.68, 0.30, 0.26, "Next Appointment", dati["upcoming appointment"])
 
+   #Funzione per recuperare i dati più recenti DAL DB e mostrali nella Dashboard
+    def recupera_latest_data_db(self):
+
+        # Funzioncina interna per non ripetere la query chilometrica dei dati numerici
+        def get_latest(metrica):
+            self.cursor.execute("""
+                SELECT N.Mean FROM DATA D 
+                JOIN NUMERICAL_DATA N ON D.IdData = N.IdNumData 
+                WHERE D.IdPatient = ? AND D.NameData = ? 
+                ORDER BY D.Date DESC LIMIT 1
+            """, (self.p_id, metrica))
+            res = self.cursor.fetchone()
+            return f"{res[0]:.1f}" if res else "--"
+
+        # Recupero la terapia
+        self.cursor.execute("SELECT Date, Description FROM THERAPY WHERE IdPatient = ? ORDER BY Date DESC LIMIT 1", (self.p_id,))
+        self.current_therapy = self.cursor.fetchone()
+        self.current_therapy_date = self.current_therapy[0] if self.current_therapy else None
+        self.current_therapy_descr = self.current_therapy[1] if self.current_therapy else None
+        self.current_therapy = f"{self.current_therapy[0]}: {self.current_therapy[1]}" if self.current_therapy else "No active therapy."
+
+        # Recupero l'appuntamento
+        self.cursor.execute("SELECT IDAppointment, Date, Time FROM APPOINTMENT WHERE IdPatient = ? ORDER BY Date ASC LIMIT 1", (self.p_id,))
+        self.next_app_info = self.cursor.fetchone()
+        self.next_appointment = f"{self.next_app_info[1]} at {self.next_app_info[2]}" if self.next_app_info else "No upcoming appointments."
+
+        # Impacchetto tutto e lo spedisco alla dashboard
+        return {
+            "vitals": f"SBP: {get_latest('SBP')} mmHg\n\nDBP: {get_latest('DBP')} mmHg\n\nHR: {get_latest('HR')} bpm",
+            "fitness": f"VO2 Max: {get_latest('VO2Max')}\n\nSpO2: {get_latest('SPO2')} %",
+            "activity": f"Sleep: {get_latest('SleepHours')} h\n\nSteps: {get_latest('StepCount')}",
+            "active therapy": f"{self.current_therapy[0]}: {self.current_therapy[1]}" if self.current_therapy else "No active therapy.",
+            "upcoming appointment": self.next_appointment
+        }
+
+    #PROFILE
     def mostra_profilo(self):
         #creo un frame a sinistra che conterrà le opzioni del profilo (Personal Info, Settings, Logout)
         self.side_frame = ctk.CTkFrame(self.current_page_frame, fg_color=COLORS["blu_acceso"], corner_radius=20)
@@ -408,9 +451,6 @@ class PatientApp():
             self.mostra_placeholder(nome)
 
     def mostra_profile_personal_info(self):
-        #recupero le informazioni personali dal database
-        self.cursor.execute("SELECT Name, Surname, BirthDate, Address, PhoneNumber, Email, Username, Password, FiscalCode FROM user WHERE username = ?", (self.user[0],))
-        self.user_data = self.cursor.fetchone()
 
         #Frame principale di contenimento scorrevole (allineato a destra del menu profilo)
         self.content_scroll = ctk.CTkScrollableFrame(self.profile_page_frame, fg_color="transparent", height=600)
@@ -422,15 +462,15 @@ class PatientApp():
 
         # Ogni elemento definisce: label, valore dal DB, colonna, e se è modificabile
         campi = [
-            {"lbl": "First Name",    "val": self.user_data[0], "col": 1, "modificabile": False},
-            {"lbl": "Last Name",     "val": self.user_data[1], "col": 0, "modificabile": False},
-            {"lbl": "Birth Date",    "val": self.user_data[2], "col": 1, "modificabile": False},
-            {"lbl": "Address",       "val": self.user_data[3], "col": 0, "modificabile": True},
-            {"lbl": "Phone Number",  "val": self.user_data[4], "col": 1, "modificabile": True},
-            {"lbl": "Email",         "val": self.user_data[5], "col": 0, "modificabile": True},
-            {"lbl": "Username",      "val": self.user_data[6], "col": 0, "modificabile": False},
-            {"lbl": "Password",      "val": self.user_data[7], "col": 1, "modificabile": True},
-            {"lbl": "Fiscal Code",   "val": self.user_data[8], "col": 0, "modificabile": False}
+            {"lbl": "First Name",    "val": self.user_data[1], "col": 1, "modificabile": False},
+            {"lbl": "Last Name",     "val": self.user_data[2], "col": 0, "modificabile": False},
+            {"lbl": "Birth Date",    "val": self.user_data[3], "col": 1, "modificabile": False},
+            {"lbl": "Address",       "val": self.user_data[4], "col": 0, "modificabile": True},
+            {"lbl": "Phone Number",  "val": self.user_data[5], "col": 1, "modificabile": True},
+            {"lbl": "Email",         "val": self.user_data[6], "col": 0, "modificabile": True},
+            {"lbl": "Username",      "val": self.user_data[7], "col": 0, "modificabile": False},
+            {"lbl": "Password",      "val": self.user_data[8], "col": 1, "modificabile": True},
+            {"lbl": "Fiscal Code",   "val": self.user_data[9], "col": 0, "modificabile": False}
         ]
 
 
@@ -613,9 +653,667 @@ class PatientApp():
             
         save_btn = ctk.CTkButton(popup, text="Save", font=FONTS["testo_bold"], fg_color=COLORS["blu_acceso"], command=salva_modifica)
         save_btn.pack(pady=(0,10))
-        
+
+    #DATA  
     def mostra_dati(self):
-        # Questa funzione mostra i dati del paziente, per ora è un placeholder che mostra solo un testo, ma in futuro si può espandere per mostrare grafici, tabelle, ecc.     
+
+        # Creo i 4 pannelli principali (Anagrafica, Vitals, Therapy, Calendar) che conterranno i vari dati specifici, e poi chiamo le funzioni che mostrano i contenuti specifici di ognuno
+        self.anagrafica = ctk.CTkFrame(self.current_page_frame, corner_radius=20, fg_color=COLORS["bianco_puro"])
+        self.anagrafica.place(relx=0.03, rely=0.03, relheight=0.20, relwidth=0.94)
+
+        self.vitals = ctk.CTkFrame(self.current_page_frame, corner_radius=20, fg_color=COLORS["bianco_puro"])
+        self.vitals.place(relx=0.03, rely=0.26, relheight=0.71, relwidth=0.70)
+        
+        self.therapy = ctk.CTkFrame(self.current_page_frame, corner_radius=20, fg_color=COLORS["bianco_puro"])
+        self.therapy.place(relx=0.75, rely=0.26, relheight=0.51, relwidth=0.22)
+        
+        self.calendar = ctk.CTkFrame(self.current_page_frame, corner_radius=20, fg_color=COLORS["bianco_puro"])
+        self.calendar.place(relx=0.75, rely=0.81, relheight=0.16, relwidth=0.22)
+
+        # Ora che ho creato i 4 pannelli principali, chiamo le funzioni che mostrano i contenuti specifici di ognuno
+        self.show_next_appointment()
+        self.show_current_therapy()
+        self.show_patient_vitals()
+        self.show_patient()
+
+    # Funzione per calcolare l'età del paziente a partire dalla data di nascita, recuperata dal database, così da mostrarla nella sezione anagrafica insieme al nome e cognome
+    def get_age(self):
+        query = """SELECT (strftime('%Y', 'now') - strftime('%Y', BirthDate)) - (strftime('%m-%d', 'now') < strftime('%m-%d', BirthDate)) AS Age
+                FROM User
+                WHERE ID = ?""" 
+
+        self.cursor.execute(query, (self.p_id,))
+        data = self.cursor.fetchall()[0]
+
+        return data
+    
+    # Funzione per recuperare i dati del medico curante del paziente
+    def get_doctor(self):
+        query = """SELECT U.Name, U.Surname, U.ID FROM User U
+                JOIN THERAPY T ON U.ID = T.IdDoctor
+                GROUP BY T.IdPatient
+                HAVING T.IdPatient = ?"""
+
+        self.cursor.execute(query, (self.p_id,))
+        data = self.cursor.fetchall()[0]
+
+        return data
+    
+    # Funzione per recupeare l'appuntamento più vicino, con la possibilità di aggiungere note prima dell'appuntamento stesso che il medico vedrà quando apre il report dell'appuntamento
+    def show_next_appointment(self):
+        
+        self.text = ctk.CTkLabel(self.calendar, text="Next Appointment", font=FONTS["titolo"], text_color=COLORS["testo_scuro"])
+        self.text.place(x=30, y=25)
+
+        if self.next_app_info:
+            app_info = self.next_app_info
+            row = ctk.CTkFrame(self.calendar, fg_color="transparent", corner_radius=20)
+            row.place(x=20, y=70, relwidth=0.85)
+
+            label_date = ctk.CTkLabel(row, width=160, anchor="w", text=f"{self.next_app_info[1]} - {self.next_app_info[2]}", font=FONTS["sottotitolo"], text_color=COLORS["testo_chiaro"])
+            label_date.grid(row=0,column=0, padx=(15,0), pady=10, sticky="w")
+
+            # do la possibilità all'utente di inviare note al medico prima dell'appuntamento, così se ha bisogno di chiarimenti o vuole anticipare qualche domanda può farlo direttamente da lì, e il medico le vedrà quando apre il report dell'appuntamento
+            note = ctk.CTkButton(row, text="Note", width=50, corner_radius=20, text_color=COLORS["testo_scuro"], 
+                                    fg_color=COLORS["bottone_grigio"], border_color=COLORS["bordi"], hover_color=COLORS["bordi"],
+                                    command = lambda app =app_info : self.appointment_note(app))
+            note.grid(row=0, column=1, padx=(0,5),pady=10,sticky="e")
+
+        else: 
+            row = ctk.CTkFrame(self.calendar, fg_color="transparent", corner_radius=20)
+            row.place(x=20, y=70, relwidth=0.85)
+
+            label_date = ctk.CTkLabel(row, width=160, anchor="w", text="No Appointments", font=FONTS["sottotitolo"], text_color=COLORS["testo_chiaro"])
+            label_date.grid(row=0,column=0, padx=(15,0), pady=10, sticky="w")
+
+    # Creo una nota legata all'appuntamento, così l'utente può scrivere al medico prima dell'appuntamento stesso se ha bisogno di chiarimenti o vuole anticipare qualche domanda
+    def appointment_note(self, app):
+        self.edit_window = ctk.CTkToplevel(self.root)
+        self.edit_window.geometry("400x520")
+        self.edit_window.configure(fg_color=COLORS["bottone_grigio"])
+
+        date = f"{datetime.today()}"[:10]
+        time = f"{datetime.today()}"[11:16]
+
+        title = ctk.CTkLabel(self.edit_window, text="Send Message", font=FONTS["titolo"], text_color=COLORS["testo_scuro"])
+        title.place(x=30, y=25)
+                     
+        lbl_name = ctk.CTkLabel(self.edit_window, text="Send to", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"])
+        lbl_name.place(x=30, y=80, anchor="w")
+        entry_name = ctk.CTkLabel(self.edit_window, corner_radius=5, text=f" {self.doctor_name} {self.doctor_surname}", anchor="w", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"],fg_color=COLORS["bianco_puro"], width=340)
+        entry_name.place(x=30, y=95)
+
+        lbl_date = ctk.CTkLabel(self.edit_window, text="Date - Time", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"])
+        lbl_date.place(x=30, y=150, anchor="w")
+        entry_data = ctk.CTkLabel(self.edit_window, width=340,font=FONTS["testo_normale"], anchor="w", text=f" {date} - {time}",text_color=COLORS["testo_scuro"], fg_color=COLORS["bianco_puro"])
+        entry_data.place(x=30, y=165)
+
+        lbl_notes = ctk.CTkLabel(self.edit_window, text="Message", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"])
+        lbl_notes.place(x=30, y=220, anchor="w")
+
+        entry_textbox = ctk.CTkTextbox(self.edit_window, width=340, height=180, corner_radius=5, 
+                                       font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"], fg_color=COLORS["bianco_puro"], wrap="word")
+        entry_textbox.place(x=30, y=235)
+        
+        self.output_add = ctk.CTkLabel(self.edit_window, width=300,text="", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"])
+        self.output_add.place(x=50, y=430)
+        
+        raw_msg = entry_textbox.get("1.0", "end-1c")
+
+        
+        # Definisco un testo predefinito legatto all'appuntamento, così l'utente può semplicemente modificare quello se vuole aggiungere qualcosa, invece di scrivere tutto da zero, e il medico capisce subito a cosa si riferisce la nota senza doverla contestualizzare con l'appuntamento
+        final_msg = f"[Related to the the following appointment {app[1]}  - {app[2]}]: {raw_msg}\n"
+
+        save = ctk.CTkButton(self.edit_window, text="Send", width=100, corner_radius=20, fg_color=COLORS["bottone_grigio"], text_color=COLORS["testo_scuro"], hover_color=COLORS["bordi"], border_color=COLORS["bordi"],
+                             command=lambda: self.send_appointment_message(self.p_id, self.id_doctor, date, time, final_msg))
+        
+        save.place(x=150, y = 470)
+
+    # Salvo la nota sìlegata all'appuntamento nel database, così posso gestire tutto in un secondo momento. AA differenza dei messaggi normali, questa ha una entry predefinita che specifica che si tratta di una nota legata all'appuntamento, così il medico capisce subito a cosa si riferisce senza doverla contestualizzare con l'appuntamento stesso
+    def send_message(self, id_sender, id_receiver, date, time, msg):
+
+        # Query di inserimento nel Database
+        query = """INSERT INTO MESSAGES (IdSender, IdReceiver, Date, Time, Content)
+                   VALUES (?, ?, ?, ?, ?)"""
+        
+        try:
+            # Passiamo i valori del dizionario usando le loro chiavi
+            self.cursor.execute(query, (
+                id_sender,
+                id_receiver,
+                date,
+                time,
+                msg
+            ))
+            
+            # Fondamentale per salvare le modifiche nel database
+            self.conn.commit() 
+            self.output_add.configure(text="Message sent successfully", text_color='green')
+            
+        except Exception as e:
+            self.output_add.configure(text=f"Error: {e}", text_color='red')
+            # In caso di errore facciamo il rollback per sicurezza
+            self.conn.rollback()
+
+    # Mostro la terapia attuale del paziente, con la data dell'ultima modifica, così da tenere sempre aggiornato il paziente sulla sua terapia, e fargli capire se è stata modificata di recente o se è un aggiornamento vecchio
+    def show_current_therapy(self):
+    
+        if self.current_therapy_date and self.current_therapy_descr:
+            date = self.current_therapy_date
+            description = self.current_therapy_descr
+        else:
+            date = "No Therapy"
+            description = "No Therapy"
+            
+        self.text = ctk.CTkLabel(self.therapy, text="Current Therapy", font=FONTS["titolo"], text_color=COLORS["testo_scuro"])
+        self.text.place(x=30, y=25)
+                     
+        lbl_date = ctk.CTkLabel(self.therapy, text="Modified on", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"])
+        lbl_date.place(x=30, y=80, anchor="w")
+        entry_date = ctk.CTkLabel(self.therapy, corner_radius=5, anchor="w", text=date, font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"],fg_color=COLORS["sfondo_grigino"], width=290)
+        entry_date.place(x=30, y=95)
+
+        lbl_description = ctk.CTkLabel(self.therapy, text="Last Update",font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"])
+        lbl_description.place(x=30, y=150, anchor="w")
+        textbox_therapy = ctk.CTkTextbox(self.therapy,corner_radius=5, font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"],fg_color=COLORS["sfondo_grigino"], width=290, height=150)
+        textbox_therapy.place(x=30, y=165)
+
+        textbox_therapy.configure(state="normal")
+        textbox_therapy.delete("1.0", "end")
+        textbox_therapy.insert("0.0", description)
+
+        self.output_add = ctk.CTkLabel(self.therapy, width=300, text="", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"])
+        self.output_add.place(x=50, y=320)
+
+    # Mostro i dati dei parametri vitali del paziente, con la possibilità di aggiungere nuovi dati e di visualizzare il grafico dell'ECG
+    def show_patient_vitals(self, error):
+        for widget in self.vitals.winfo_children():
+            widget.destroy()
+
+        row = ctk.CTkFrame(self.vitals, fg_color="transparent", corner_radius=20)
+        row.place(x=20, y=20, relwidth=0.95)
+
+        text = ctk.CTkLabel(row, text="Vitals", font=FONTS["titolo"], text_color=COLORS["testo_scuro"])
+        text.grid(row=0, column=1, padx=15, pady=10, sticky="w")
+        
+        # Pulscante per visualizzare il grafico dell'ECG
+        ecg = ctk.CTkButton(row, text="Plot ECG", width=70, corner_radius=20, text_color=COLORS["testo_scuro"], 
+                                fg_color=COLORS["bottone_grigio"], hover_color=COLORS["bordi"], border_color=COLORS["bordi"],
+                                command = lambda : self.add_ecg())
+        ecg.grid(row=0, column=2, padx=(15,5),pady=10,sticky="e")
+
+        # Pulsante per aggiungere nuovi dati dei parametri vitali
+        add = ctk.CTkButton(row, text="Add Vitals", width=70, corner_radius=20, text_color=COLORS["testo_scuro"], 
+                                fg_color=COLORS["bottone_grigio"], hover_color=COLORS["bordi"], border_color=COLORS["bordi"],
+                                command = lambda : self.add_vitals())
+        add.grid(row=0, column=3, padx=(15,5),pady=10,sticky="e")
+
+        row.grid_columnconfigure(1,weight=1)
+
+        # Frame all'interno del pannello, destinato ai grafici
+        self.plot_area = ctk.CTkFrame(self.vitals, fg_color="transparent", corner_radius=20,height=430, width=1100)
+        self.plot_area.place(x=10,y=100)
+
+        self.output = ctk.CTkLabel(self.vitals, text = f"Select Add Vitals to plot", font=FONTS["testo_normale"], text_color=COLORS["testo_chiaro"])
+        self.output.place(x=35, y=70)
+
+        self.output_date = ctk.CTkLabel(self.vitals, text = "", font=FONTS["sottotitolo"], text_color=COLORS["testo_chiaro"])
+        self.output_date.place(x=300, y=70)
+
+        #Gestione degli errori nel plotting
+        if error:
+            # Creiamo la scritta di Errore centrata perfettamente dentro self.plot_area
+            label_errore = ctk.CTkLabel(self.plot_area, text="ERROR: Missing values", font=FONTS["titolo"], text_color="red")
+            label_errore.place(relx=0.5, rely=0.5, anchor="center")
+
+    # Funzione per mostrare gli esami passati del paziente, con la possibilità di scaricare il report di ogni esame
+    def show_patient_exams(self):
+        for widget in self.vitals.winfo_children():
+            widget.destroy()
+
+        row = ctk.CTkFrame(self.vitals, fg_color="transparent", corner_radius=20)
+        row.place(x=20, y=20, relwidth=0.95)
+
+        text = ctk.CTkLabel(row, text="Past Exams", font=FONTS["titolo"], text_color=COLORS["testo_scuro"])
+        text.grid(row=0, column=1, padx=15, pady=10, sticky="w")
+        
+        self.exams_area = ctk.CTkScrollableFrame(self.vitals, fg_color="transparent", corner_radius=20,height=430, width=1100)
+        self.exams_area.place(x=10,y=70)
+
+        # Retrieve degli esami passati
+        exams = self.get_past_exams()
+        
+        # Griglia per mostrare gli esami, con data, descrizione e pulsante per scaricare il report di ogni esame
+        for ex in exams:
+            id, date, text = ex
+            row = ctk.CTkFrame(self.exams_area, fg_color="transparent")
+            row.pack(fill='x',padx=0, pady=0)
+
+            label_date = ctk.CTkLabel(row, text=date, font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"])
+            label_date.grid(row=0,column=0, padx=15, pady=10, sticky="w")
+
+            label_report = ctk.CTkLabel(row, text=text, font=FONTS["sottotitolo"], text_color=COLORS["testo_chiaro"])
+            label_report.grid(row=0,column=1, padx=15, pady=10, sticky="w")
+
+            # Pulsante per scaricare il report dell'esame, con una funzione dedicata che prende l'id dell'esame così sa quale report scaricare
+            download = ctk.CTkButton(row, text="Download Report", width=70, corner_radius=20, text_color=COLORS["testo_scuro"], 
+                                 fg_color=COLORS["bottone_grigio"], hover_color=COLORS["bordi"], border_color=COLORS["bordi"],
+                                 command = lambda id=id : self.download_report(id))
+            download.grid(row=0, column=2, padx=(15,50),pady=10,sticky="e")
+
+            row.grid_columnconfigure(1, weight=1)
+
+    # Funzione per recuperare gli esami passati del paziente dal database, così da mostrarli nella sezione dedicata
+    def get_past_exams(self):
+
+        # Recupero i dati degli appuntamenti passati
+        query = """SELECT IdAppointment, Date, Time, Description FROM APPOINTMENTS
+                WHERE IdPatient = ?
+                AND (Date < DATE('now', 'localtime') 
+                    OR (Date = DATE('now', 'localtime') AND Time < TIME('now', 'localtime')))
+                ORDER BY Date DESC, Time DESC"""
+      
+        self.cursor.execute(query, (self.p_id,))
+        data = self.cursor.fetchall()
+        return data
+
+    # Creo un pannello che contiene i dati principali del paziente (nome, cognome, età) e da cui si può accedere alla sezione dei parametri vitali, degli esami passati, inviare messaggi al medico
+    def show_patient(self):
+
+        self.text = ctk.CTkLabel(self.current, text="Patient Overview", font=FONTS["titolo"], text_color=COLORS["testo_scuro"])
+        self.text.place(x=30, y=25)
+            
+        row = ctk.CTkFrame(self.current, fg_color="transparent", corner_radius=20)
+        row.place(x=20, y=70, relwidth=0.98)
+
+        dot_code = ctk.CTkFrame(row, width=24, height=24, corner_radius=12, fg_color=COLORS["blu_acceso"])
+        dot_code.grid(row=0,column=0, padx=15, pady=10, sticky="ew")
+
+        label_name = ctk.CTkLabel(row, text=self.patient_name, font=FONTS["titolo"], text_color=COLORS["testo_scuro"],width=75, anchor="w")
+        label_name.grid(row=0,column=1, padx=15, pady=10, sticky="w")
+
+        label_surname = ctk.CTkLabel(row, text=self.patient_surname, font=FONTS["titolo"], text_color=COLORS["testo_scuro"],width=75, anchor="w")
+        label_surname.grid(row=0,column=2, padx=15, pady=10, sticky="w")
+
+        label_age = ctk.CTkLabel(row, text=f"Age: {self.patient_age}", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"],width=75, anchor="w")
+        label_age.grid(row=0,column=3, padx=15, pady=10, sticky="w")
+
+        label_height = ctk.CTkLabel(row, text=f"Height: {self.patient_weight} cm", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"],width=75, anchor="w")
+        label_height.grid(row=0,column=4, padx=15, pady=10, sticky="w")
+
+        label_weight = ctk.CTkLabel(row, text=f"Weight: {self.patient_weight} Kg", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"],width=75, anchor="w")
+        label_weight.grid(row=0,column=5, padx=15, pady=10, sticky="w")
+
+        self.output_add = ctk.CTkLabel(row,text="", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"],width=120)
+        self.output_add.grid(row=0, column=6, padx=15, pady=10, sticky="w")
+
+        #Inserisco i vari pulsanti per accedere alle diverse sottosezioni (vitals, esami passati, messaggi)
+        vitals = ctk.CTkButton(row, text="Show Vitals", width=70, corner_radius=20, text_color=COLORS["testo_scuro"], 
+                                 fg_color=COLORS["bottone_grigio"], hover_color=COLORS["bordi"], border_color=COLORS["bordi"],
+                                 command = lambda : self.show_patient_vitals(False))
+        vitals.grid(row=0, column=7, padx=(5,5),pady=10,sticky="e")
+
+        message = ctk.CTkButton(row, text="Message", width=70, corner_radius=20, text_color=COLORS["testo_scuro"], 
+                                fg_color=COLORS["bottone_grigio"], hover_color=COLORS["bordi"], border_color=COLORS["bordi"],
+                                command = lambda : self.message())
+        message.grid(row=0, column=8, padx=(5,15),pady=10,sticky="e")
+
+        record_ecg = ctk.CTkButton(row, text="Record ECG", width=70, corner_radius=20, text_color=COLORS["testo_scuro"], 
+                                fg_color=COLORS["bottone_grigio"], hover_color=COLORS["bordi"], border_color=COLORS["bordi"],
+                                command = lambda : self.record_ecg())
+        record_ecg.grid(row=0, column=9, padx=(5,15),pady=10,sticky="e")
+
+        row.grid_columnconfigure(3,weight=1)
+
+    # Messaggi generici (non legati all'appuntamento)
+    def message(self, id_sender, id_receiver):
+        sender = id_sender
+        receiver = id_receiver
+
+        self.edit_window = ctk.CTkToplevel(self.root)
+        self.edit_window.geometry("400x520")
+        self.edit_window.configure(fg_color=COLORS["bottone_grigio"])
+
+        date = f"{datetime.today()}"[:10]
+        time = f"{datetime.today()}"[11:16]
+
+        title = ctk.CTkLabel(self.edit_window, text="Send Message", font=FONTS["titolo"], text_color=COLORS["testo_scuro"])
+        title.place(x=30, y=25)
+
+        dot_code = ctk.CTkFrame(self.edit_window, width=24, height=24, corner_radius=12, fg_color=COLORS["blu_acceso"])
+        dot_code.place(x=346, y=30)
+                     
+        lbl_name = ctk.CTkLabel(self.edit_window, text="Send to", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"])
+        lbl_name.place(x=30, y=80, anchor="w")
+        entry_name = ctk.CTkLabel(self.edit_window, corner_radius=5, text=f" {self.doctor_name} {self.doctor_surname}" if receiver == self.doctor_id else "Admin", anchor="w", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"],fg_color=COLORS["bianco_puro"], width=340)
+        entry_name.place(x=30, y=95)
+
+        lbl_date = ctk.CTkLabel(self.edit_window, text="Date - Time", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"])
+        lbl_date.place(x=30, y=150, anchor="w")
+        entry_data = ctk.CTkLabel(self.edit_window, width=340,font=FONTS["testo_normale"], anchor="w", text=f" {date} - {time}",text_color=COLORS["testo_scuro"], fg_color=COLORS["bianco_puro"])
+        entry_data.place(x=30, y=165)
+
+        lbl_notes = ctk.CTkLabel(self.edit_window, text="Message", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"])
+        lbl_notes.place(x=30, y=220, anchor="w")
+        
+        entry_textbox = ctk.CTkTextbox(self.edit_window, width=340, height=180, corner_radius=5, 
+                                       font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"], fg_color=COLORS["bianco_puro"], wrap="word")
+        entry_textbox.place(x=30, y=235)
+        
+        self.output_add = ctk.CTkLabel(self.edit_window, width=300,text="", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"])
+        self.output_add.place(x=50, y=430)
+
+        save = ctk.CTkButton(self.edit_window, text="Send", width=100, corner_radius=20, fg_color=COLORS["bianco_puro"], text_color=COLORS["testo_scuro"], hover_color=self.risk_code(self.code),
+                             command=lambda: self.send_message(sender, receiver, date, time, entry_textbox.get("1.0", "end-1c")))
+        
+        save.place(x=150, y = 470)
+
+    # Apro una finrstra pop up per scegliere quale parametro visualizzare e l'intervallo di tempo
+    def add_vitals(self):
+        self.edit_window = ctk.CTkToplevel(self.root)
+        self.edit_window.geometry("400x300")
+        self.edit_window.configure(fg_color=COLORS["bottone_grigio"])
+
+        title = ctk.CTkLabel(self.edit_window, text="Add Vitals", font=FONTS["titolo"], text_color=COLORS["testo_scuro"])
+        title.place(x=30, y=25)
+
+        dot_code = ctk.CTkFrame(self.edit_window, width=24, height=24, corner_radius=12, fg_color=COLORS["blu_acceso"])
+        dot_code.place(x=346, y=30)
+                     
+        start_date = ctk.CTkLabel(self.edit_window, text="Start Date", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"])
+        start_date.place(x=30, y=80, anchor="w")
+        entry_start = ctk.CTkEntry(self.edit_window, width=150,corner_radius=5, placeholder_text="YYYY-MM-DD", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"],fg_color=COLORS["bianco_puro"])
+        entry_start.place(x=30, y=95)
+
+        # Data di inizio e fine delle acquisizioni in formato YYYY-MM-DD
+        end_date = ctk.CTkLabel(self.edit_window, text="End Date", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"])
+        end_date.place(x=220, y=80, anchor="w")
+        entry_end = ctk.CTkEntry(self.edit_window, width=150,corner_radius=5, placeholder_text="YYYY-MM-DD", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"],fg_color=COLORS["bianco_puro"])
+        entry_end.place(x=220, y=95)
+        
+        # Lista di tutti i parametri da poter selezionare nel menù a tendina
+        vitals_list = ["Systolic BP", "Diastolic BP", "Heart Rate", "Step Count", "Sleep Hours", "SPO2", "VO2max"]
+        
+        vitals = ctk.CTkLabel(self.edit_window, text="Vitals", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"])
+        vitals.place(x=30, y=150, anchor="w")
+        menu = ctk.CTkOptionMenu(self.edit_window, width=340, values=vitals_list[1:],fg_color=COLORS["bianco_puro"], font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"], button_color=COLORS["bianco_puro"],button_hover_color=COLORS["bordi"])
+        menu.place(x=30, y=165)
+        
+        self.output_add = ctk.CTkLabel(self.edit_window, width=300,text="", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"])
+        self.output_add.place(x=50, y=250)
+
+        # Bottone di salvataggio: avvia il query dei dati
+        save = ctk.CTkButton(self.edit_window, text="Add", width=100, corner_radius=20, fg_color=COLORS["bianco_puro"], text_color=COLORS["testo_scuro"], hover_color=COLORS["bordi"], border_color=COLORS["bordi"],
+                            command = lambda : self.get_vitals(entry_start.get(), entry_end.get(),menu.get()))
+        save.place(x=150, y = 250)
+
+    # Funzione utile ad effettuare il query di tutti i dati di un tipo dal db e ordinarli in un dizionario sulla base di data, se day or night, valore medio, max e min durante quella giornata    
+    def get_vitals(self, start, end, vit):
+        
+        # Converti stringhe in oggetti datetime
+        date_start = datetime.strptime(start, "%Y-%m-%d")
+        date_end = datetime.strptime(end, "%Y-%m-%d")
+
+        # Sottrazione per trovare il numero dei giorni di acquisizione
+        days_range = (date_end - date_start).days + 1
+        valori_attesi = 2*days_range
+
+        query = """SELECT num.Date, num.Max, num.Min, num.Average, num.DayTime
+                FROM NumericalData AS num
+                JOIN Data ON num.IDNumData = Data.IDData
+                WHERE data.IDPatient = ?
+                AND data.NameData = ?
+                AND num.Date BETWEEN ? AND ?
+                AND num.DayTime IN ('Day', 'Night')
+                ORDER BY num.Date ASC """
+        
+        self.cursor.execute(query, (self.IDPat, vit, start, end))
+        records = self.cursor.fetchall()
+
+        if len(records)<valori_attesi:
+            self.show_patient_vitals(True)
+
+        else:
+            # Creo un dizionario e lo popolo con i dati ottenuti tramite la query
+            if vit ==  "Step Count":
+                vitals_info = {"dates": [], "max": [], "min": [], "mean": []}
+                for row in records:
+                    vitals_info["dates"].append(row[0])
+                    vitals_info["max"].append(row[1])
+                    vitals_info["min"].append(row[2])
+                    vitals_info["mean"].append(row[3])
+
+                    self.plot_vitals(vitals_info, vitals_info, vit)
+
+            
+            else:
+                vitals_info = {
+                    "Day":   {"dates": [], "max": [], "min": [], "mean": []},
+                    "Night": {"dates": [], "max": [], "min": [], "mean": []}
+                }
+                
+                for row in records:
+                    daytime = row[4] # 'Day' oppure 'Night'
+                
+                    if daytime in vitals_info:
+                        vitals_info[daytime]["dates"].append(row[0])
+                        vitals_info[daytime]["max"].append(row[1])
+                        vitals_info[daytime]["min"].append(row[2])
+                        vitals_info[daytime]["mean"].append(row[3])
+
+                self.plot_vitals(vitals_info["Day"], vitals_info["Night"], vit)
+            
+    # Funzione per la gestione del plot dei dati vitali
+    def plot_vitals(self, day, night, vit):
+        for widget in self.plot_area.winfo_children():
+            widget.destroy()
+        
+        self.output.destroy()
+        self.output_date.destroy()
+
+        # Premendo il bottone della mattina o della sera viene aggionrato il plot di conseguenza (per step count non ho distinzione)
+        if vit != "Step Count":
+            self.btn_day = ctk.CTkButton(self.vitals, text="Day", width=50, corner_radius=20, hover_color=COLORS["bordi"],
+                                        fg_color=COLORS["bordi"], text_color=COLORS["sfondo_grigino"],command=lambda: self.update_vitals("Day", day, night, vit))
+            self.btn_day.place(x=35, y=70)
+
+            self.btn_night = ctk.CTkButton(self.vitals, text="Night", width=50, corner_radius=20, hover_color=COLORS["bordi"],
+                                        fg_color=COLORS["bordi"], text_color=COLORS["sfondo_grigino"], command=lambda: self.update_vitals("Night", night, night, vit))
+            self.btn_night.place(x=95, y=70) 
+
+        #Di default vedrò i dati diurni
+        self.update_vitals("Day", day, night, vit)
+    
+    # Passo alla funzione sia i valori diurni che quelli notturni, ma carico solo quelli selezionati
+    def update_vitals(self, time, day, night, vit):
+        for widget in self.plot_area.winfo_children():
+            widget.destroy()
+
+        self.output.destroy()
+        self.output_date.destroy()
+
+        # Gestione dei bottoni a seguito della selezione (solo se diverso da step count)
+        if vit != "Step Count":
+            if time == "Day":
+                data = day
+                self.btn_day.configure(fg_color=COLORS["bordi"], text_color=COLORS["sfondo_grigino"])
+                self.btn_night.configure(fg_color=COLORS["bottone_grigio"], text_color=COLORS["testo_scuro"])
+            elif time == "Night":
+                data = night
+                self.btn_day.configure(fg_color=COLORS["bottone_grigio"], text_color=COLORS["testo_scuro"])
+                self.btn_night.configure(fg_color=COLORS["bordi"], text_color=COLORS["sfondo_grigino"])
+            
+        # Generazione di figura con assi, labels, grafici e riempimenti
+        fig = Figure(figsize=(8.5, 4),facecolor="none") 
+        
+        ax = fig.add_subplot(111)       
+        ax.set_facecolor("none")
+
+        ax.plot(data["dates"], data["mean"], color=COLORS["blu_acceso"], linewidth=3)
+        ax.fill_between(data["dates"], data["min"], data["max"], color=COLORS["blu_acceso"], alpha=0.2, edgecolor='none')
+        
+        ax.tick_params(axis="x", colors=COLORS["testo_scuro"], labelsize=10, labelbottom=True)
+        ax.tick_params(axis="y", colors=COLORS["testo_scuro"], labelsize=10)
+        
+        for label in ax.get_xticklabels() + ax.get_yticklabels():
+            label.set_family("sans-serif")
+            label.set_visible(True)
+
+        for spine in ax.spines.values():
+            spine.set_visible(False)
+
+        ax.yaxis.grid(True, linestyle="--", alpha=0.3, color=COLORS["testo_scuro"])
+        ax.set_axisbelow(True)
+
+        fig.tight_layout()
+        fig.subplots_adjust(left=0.075, right=1, top=0.95, bottom=0.25)
+
+        canvas = FigureCanvasTkAgg(fig, master=self.plot_area)
+        canvas_widget = canvas.get_tk_widget()
+        canvas_widget.configure(bg=COLORS["bianco_puro"], highlightthickness=0)
+        canvas_widget.pack(fill="both", expand=True)
+        
+        canvas.draw()
+
+        self.output = ctk.CTkLabel(self.vitals, text = f"Plotting {time} {vit} [{UNITS[vit]}]", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"])
+        self.output.place(x=180, y=70)
+
+        self.output_date = ctk.CTkLabel(self.vitals, text = f"Recorded from {day['dates'][0]} to {day['dates'][-1]}", font=FONTS["sottotitolo"], text_color=COLORS["testo_chiaro"])
+        self.output_date.place(x=465, y=70)
+
+    # Funzione per il retrieve di tutte le date di ECG disponibili e successiva selezione tramite menu a tendina
+    def add_ecg(self):
+        query = """
+            SELECT Date, Time
+            FROM DATA 
+            WHERE IdPatient = ? 
+            AND NameData = 'ECG'
+            ORDER BY D.Date DESC
+        """
+
+        self.cursor.execute(query, (self.p_id))
+        datetime_list = self.cursor.fetchall()
+
+        acquisitions = []
+
+        for riga in datetime_list:
+            acquisitions.append(f"{riga[0]} -- {riga[1]}")
+        
+        acquisitions.insert(0,None)
+
+        self.edit_window = ctk.CTkToplevel(self.root)
+        self.edit_window.geometry("400x200")
+        self.edit_window.configure(fg_color=COLORS["bottone_grigio"])
+
+        title = ctk.CTkLabel(self.edit_window, text="Plot ECG", font=FONTS["titolo"], text_color=COLORS["testo_scuro"])
+        title.place(x=30, y=25)
+
+        dot_code = ctk.CTkFrame(self.edit_window, width=24, height=24, corner_radius=12, fg_color=COLORS["blu_acceso"])
+        dot_code.place(x=346, y=30)
+                     
+        start_date = ctk.CTkLabel(self.edit_window, text="Select Date:", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"])
+        start_date.place(x=30, y=80, anchor="w")
+        menu = ctk.CTkOptionMenu(self.edit_window, width=340, values=acquisitions[1:],fg_color=COLORS["bianco_puro"], font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"], button_color=COLORS["bianco_puro"],button_hover_color=COLORS["bordi"])
+        menu.place(x=30, y=95)
+        
+        self.output_add = ctk.CTkLabel(self.edit_window, width=300,text="", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"])
+        self.output_add.place(x=50, y=130)
+
+        # Tramite il bottone 'save' inizio il retrieve vero e proprio del segnale
+        save = ctk.CTkButton(self.edit_window, text="Plot", width=100, corner_radius=20, fg_color=COLORS["bianco_puro"], text_color=COLORS["testo_scuro"], hover_color=COLORS["bordi"], border_color=COLORS["bordi"],
+                                command = lambda : self.get_ecg(menu.get()))
+        save.place(x=150, y = 150)
+    
+    # Conversione del BLOB in float a 32 bit e campionamento
+    def get_ecg(self, acquisition):
+
+        # Convertiamo l'intera stringa in un oggetto datetime unico
+        dt_converted = datetime.strptime(acquisition, "%Y-%m-%d -- %H:%M")
+
+        # Estraiamo la data e l'ora nel loro formato nativo (oggetti date e time)
+        date = dt_converted.date()
+        time = dt_converted.time()
+
+        # Query per estrarre il valore del BLOB binario e la frequenza di campionamento
+        query = """SELECT S.Value, S.Sampling_Freq 
+                FROM SIGNALS S
+                JOIN DATA D ON S.IdSignals = D.IdData
+                WHERE D.IdPatient = ? 
+                AND D.NameData = 'ECG'
+                AND D.Date = ?
+                AND D.Time = ?"""
+        
+        self.cursor.execute(query, (self.IDPat, date, time))
+        record = self.cursor.fetchall()[0]
+
+        blob_data = record[0]
+        sampling_freq = record[1]
+
+        # Calcoliamo quanti numeri float (da 4 byte l'uno) ci sono nel BLOB
+        num_floats = len(blob_data) // 4
+        
+        # 'f' indica il formato float a 32 bit. Moltiplicato per il numero di elementi (es. '500f')
+        y = list(struct.unpack(f"{num_floats}f", blob_data))
+
+        # Ricavo l'asse dei tempi (con arrotondamento), partendo dalla freq. di campionamento per tutti i campioni registrati
+        x = [round(i * (1.0/sampling_freq), 2) for i in range(len(y))]
+
+
+        self.plot_ecg(x,y, date, time)
+
+    # Generazione del grafico a partire dai dati raccolti
+    def plot_ecg(self, x, y, date, time):
+        for widget in self.plot_area.winfo_children():
+            widget.destroy()
+     
+        self.output.destroy()
+        self.output_date.destroy()
+        
+        fig = Figure(figsize=(8.5,4), facecolor="none") 
+        
+        ax = fig.add_subplot(111)       
+        ax.set_facecolor("none")
+        
+        ax.plot(x, y, color=COLORS["blu_acceso"], linewidth=3, label="Mean")
+        
+        ax.tick_params(axis="x", colors=COLORS["testo_scuro"], labelsize=10, labelbottom=True)
+        ax.tick_params(axis="y", colors=COLORS["testo_scuro"], labelsize=10)
+        
+        for label in ax.get_xticklabels() + ax.get_yticklabels():
+            label.set_family("sans-serif")
+            label.set_visible(True)
+
+        for spine in ax.spines.values():
+            spine.set_visible(False)
+
+        ax.yaxis.grid(True, linestyle="--", alpha=0.3, color=COLORS["testo_scuro"])
+        ax.set_axisbelow(True)
+
+        fig.subplots_adjust(left=0.075, right=1, top=0.95, bottom=0.25)
+
+        canvas = FigureCanvasTkAgg(fig, master=self.plot_area)
+        canvas_widget = canvas.get_tk_widget()
+        canvas_widget.configure(bg=COLORS["bianco_puro"], highlightthickness=0)
+        canvas_widget.pack(fill="both", expand=True)
+        
+        canvas.draw()
+
+        self.output = ctk.CTkLabel(self.vitals, text = f"Plotting ECG [mV]", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"])
+        self.output.place(x=35, y=70)
+
+        self.output_date = ctk.CTkLabel(self.vitals, text = f"Recorded on {date} - {time}", font=FONTS["sottotitolo"], text_color=COLORS["testo_chiaro"])
+        self.output_date.place(x=240, y=70)
+
+    # Popup che simula l'abilitazione del wearable per l'acquisizione ECG
+    def record_ecg(self):
+        self.guidelines = ctk.CTkToplevel()
+        self.guidelines.geometry("200x320")
+        self.guidelines.configure(fg_color=COLORS["sfondo_grigino"])
+        self.guideframe = ctk.CTkLabel(self.current_page_frame, text="Please, follow the instructions on the wearable to record your ECG.", font=FONTS["testo_bold"], text_color=COLORS["testo_scuro"], wraplength=100, anchor="center")
+        self.guideframe.place(relx=0.5, rely=0.5, anchor="center")
+
+
+
     def mostra_placeholder(self, nome):
         ctk.CTkLabel(self.current_page_frame, text=f"{nome} page content goes here.", font=FONTS["testo_bold"], text_color=COLORS["testo_scuro"]).place(relx=0.5, rely=0.5, anchor="center")
 
