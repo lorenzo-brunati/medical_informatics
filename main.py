@@ -1222,8 +1222,6 @@ class PatientApp():
 
         dot_code = ctk.CTkFrame(self.edit_window, width=24, height=24, corner_radius=12, fg_color=COLORS["blu_acceso"])
         dot_code.place(x=346, y=30)
-
-        print(date_list)
                      
         start_date = ctk.CTkLabel(self.edit_window, text="Select Date", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"])
         start_date.place(x=30, y=80, anchor="w")
@@ -1267,8 +1265,12 @@ class PatientApp():
         self.plot_ecg()
 
     def plot_ecg(self):
-        self.btn_day.destroy()
-        self.btn_night.destroy()
+        # Controlliamo se i bottoni esistono prima di distruggerli
+        if hasattr(self, 'btn_day') and self.btn_day is not None:
+            self.btn_day.destroy()
+            
+        if hasattr(self, 'btn_night') and self.btn_night is not None:
+            self.btn_night.destroy()
 
         self.left = ctk.CTkButton(self.vitals, text="<", width=40, corner_radius=20, hover_color=COLORS["bordi"], border_color=COLORS["bordi"],
                                         fg_color=COLORS["bottone_grigio"], text_color=COLORS["testo_scuro"],command=lambda: self.update_index("L"))
@@ -1294,7 +1296,7 @@ class PatientApp():
         ax = fig.add_subplot(111)       
         ax.set_facecolor("none")
         
-        ax.plot(x, y, color=self.risk_code(self.code), linewidth=3, label="Mean")
+        ax.plot(x, y, color=COLORS["bordi"], linewidth=3, label="Mean")
         
         ax.tick_params(axis="x", colors=COLORS["testo_scuro"], labelsize=10, labelbottom=True)
         ax.tick_params(axis="y", colors=COLORS["testo_scuro"], labelsize=10)
@@ -1394,8 +1396,8 @@ class PatientApp():
                 label_description = ctk.CTkLabel(row, text=desc, font=FONTS["sottotitolo"], text_color=COLORS["testo_chiaro"])
                 label_description.grid(row=0,column=4, padx=15, pady=10, sticky="w")
 
-                open = ctk.CTkButton(row, text="Edit", width=70, corner_radius=20, text_color=COLORS["testo_scuro"], 
-                                        fg_color=COLORS["bottone_grigio"], hover_color=COLORS["bordi"], border_color=["bordi"],
+                open = ctk.CTkButton(row, text="Details", width=70, corner_radius=20, text_color=COLORS["testo_scuro"], 
+                                        fg_color=COLORS["bottone_grigio"], hover_color=COLORS["bordi"], border_color=COLORS["bordi"],
                                         command = lambda app=app : self.open_appointment(app))
                 open.grid(row=0, column=5, padx=(15,5),pady=10,sticky="e")
 
@@ -1514,7 +1516,7 @@ class PatientApp():
                 label_report = ctk.CTkLabel(row, text=desc, font=FONTS["sottotitolo"], text_color=COLORS["testo_chiaro"])
                 label_report.grid(row=0,column=4, padx=15, pady=10, sticky="w")
 
-                open = ctk.CTkButton(row, text="Edit", width=70, corner_radius=20, text_color=COLORS["testo_scuro"], 
+                open = ctk.CTkButton(row, text="Details", width=70, corner_radius=20, text_color=COLORS["testo_scuro"], 
                                         fg_color=COLORS["bottone_grigio"], hover_color=COLORS["bordi"], border_color=COLORS["bordi"],
                                         command = lambda app=app : self.open_appointment(app))
                 open.grid(row=0, column=5, padx=(15,5),pady=10,sticky="e")
@@ -1753,7 +1755,7 @@ class PatientApp():
                 dot_color = COLORS["blu_acceso"]
                 dot_size = 12
             else:
-                header_str = f"[Dr. {self.DocSurname} - {time}]"
+                header_str = f"[Dr. {self.doctor_surname} - {time}]"
                 msg_color = COLORS["testo_chiaro"]
                 dot_color = COLORS["bordi"]
                 dot_size = 24 if not read else 12
@@ -1841,15 +1843,16 @@ class PatientApp():
         self.output_add = ctk.CTkLabel(self.edit_window, width=300,text="", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"])
         self.output_add.place(x=50, y=430)
 
-        reply = ctk.CTkButton(self.edit_window, text="Reply", width=100, corner_radius=20, fg_color=COLORS["bianco_puro"], text_color=COLORS["testo_scuro"], hover_color=COLORS['bordi'], border_color=COLORS['bordi'],
-                             command=lambda: self.message(self.p_id, self.doctor_id))
-        
-        reply.place(x=95, y = 470)
+        if sender != self.p_id:
+            reply = ctk.CTkButton(self.edit_window, text="Reply", width=100, corner_radius=20, fg_color=COLORS["bianco_puro"], text_color=COLORS["testo_scuro"], hover_color=COLORS['bordi'], border_color=COLORS['bordi'],
+                                command=lambda: self.message(self.p_id, self.doctor_id))
+            
+            reply.place(x=95, y = 470)
 
-        read = ctk.CTkButton(self.edit_window, text="Read", width=100, corner_radius=20, fg_color=COLORS["bianco_puro"], text_color=COLORS["testo_scuro"], hover_color=COLORS['bordi'], border_color=COLORS['bordi'],
-                             command=lambda: self.read_message(id))
-        
-        read.place(x=205, y = 470)
+            read = ctk.CTkButton(self.edit_window, text="Read", width=100, corner_radius=20, fg_color=COLORS["bianco_puro"], text_color=COLORS["testo_scuro"], hover_color=COLORS['bordi'], border_color=COLORS['bordi'],
+                                command=lambda: self.read_message(id))
+            
+            read.place(x=205, y = 470)
 
     # Gestisco l'effetto del bottone che contrassegna un messaggio come letto
     def read_message(self, id):
@@ -1889,5 +1892,5 @@ class AdminApp():
         self.temp.place(x=0, y=30)
 
 #LoginApp()
-user = ("mferrari",)
+user = ("alombardi",)
 PatientApp(user)
