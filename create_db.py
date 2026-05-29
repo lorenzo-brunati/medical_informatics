@@ -1,6 +1,6 @@
 import sqlite3
+import csv
 import pandas as pd
-
 
 conn = sqlite3.connect('database.db')
 
@@ -10,10 +10,44 @@ file = open('db_init.sql', 'r')
 cursor.executescript(file.read())
 file.close()
 
+def load_ecg():
+    csv_file_path = "ecg.csv"
+
+    ids_signals = [19, 38, 57, 76, 95, 114, 133, 152, 171]
+    sampling_freq = 257
+    time_val = "21:00"
+
+    print("Elaboration of Table: SIGNALS...")
+
+    with open(csv_file_path, mode="r") as file:
+        reader = csv.reader(file)
+
+        for index, row in enumerate(reader):
+
+
+            current_id = ids_signals[index]
+            ecg_numbers = row[1:]
+
+            csv_string_value = ",".join(ecg_numbers)
+
+            sql_query = """
+                INSERT INTO SIGNALS (IdSignals, Value, Sampling_Freq, Time)
+                VALUES (?, ?, ?, ?)
+            """
+
+            cursor.execute(
+                sql_query, (current_id, csv_string_value, sampling_freq, time_val)
+            )
+
+    conn.commit()
+    print(
+        f"✅ {len(ids_signals)} rows successfully inserted in 'SIGNALS'."
+    )
+    
 def populate_database(excel_path, db_path):
     
     # 2. Caricamento del file Excel
-    print(f"Lettura del file Excel: {excel_path}...")
+    print(f"Reading Excel file: {excel_path}...")
 
     # 3. Definizione dell'ordine tassativo di inserimento (rispetta i vincoli FK)
     insertion_order = [
@@ -28,15 +62,16 @@ def populate_database(excel_path, db_path):
         "WEARABLE_DEVICE",
         "DATA",
         "NUMERICAL_DATA",
-        "SIGNALS",
         "NOTIFICATION",
         "CHECK_OUT",
+        "PATHOLOGY",
+        "USER_PATHOLOGIES",
     ]
 
     # 4. Iterazione sui fogli nell'ordine corretto
     for table_name in insertion_order:
        
-        print(f"Elaborazione della tabella: {table_name}...")
+        print(f"Elaboration of Table: {table_name}...")
 
         # Legge il foglio specifico
         df = pd.read_excel(excel_path, sheet_name=table_name)
@@ -101,7 +136,7 @@ def populate_database(excel_path, db_path):
             cursor.executemany(query, rows_to_insert)
             conn.commit()
             print(
-                f"✅ Inserite con successo {len(rows_to_insert)} righe in '{table_name}'."
+                f"✅ {len(rows_to_insert)} rows successfully inserted in '{table_name}'."
             )
         except sqlite3.Error as e:
             conn.rollback()
@@ -109,9 +144,11 @@ def populate_database(excel_path, db_path):
                 f"❌ Errore durante l'inserimento nella tabella '{table_name}': {e}"
             )
 
+    load_ecg()
+
     # 7. Chiusura connessione
     conn.close()
-    print("\nProcedura di popolamento completata!")
+    print("\nDB successfully populated!")
 
 
 # Sostituisci con i tuoi percorsi reali

@@ -16,7 +16,8 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
         
 from PIL import Image
-import struct
+
+import hashlib
 
 COLORS = {
     "sfondo_grigino": "#E8EBF2",
@@ -69,7 +70,8 @@ class DoctorApp():
         self.root.geometry("1600x900")
         
         self.upload_icons()
-    
+        self.algorithm()
+
         self.setup_gui()
         self.root.mainloop()
 
@@ -180,6 +182,86 @@ class DoctorApp():
         }
 
         return risk_colors[code]
+
+    def algorithm(self):
+        print("Algorithm started...")
+                
+        today = f"{datetime.today()}"[:10]
+        
+        test_start_date = "2026-05-27"
+        test_end_date = "2026-06-04"
+        
+        self.cursor.execute("""
+            SELECT IdPatient, RiskCode 
+            FROM PATIENT_CLINICALDATA 
+            WHERE LastUpdate IS NULL OR LastUpdate != ?
+        """, (today,))
+        
+        patients = self.cursor.fetchall()
+        
+        for id_patient, current_risk in patients:
+            self.cursor.execute("""
+                SELECT ThresholdSBP, ThresholdDBP, ThresholdSpO2, ThresholdUpperHeartRate, ThresholdLowerHeartRate
+                FROM THR_PERSONALIZED
+                WHERE IdPatient = ?
+            """, (id_patient,))
+            
+            thresholds = self.cursor.fetchone()
+            if not thresholds:
+                continue
+                
+            t_sbp, t_dbp, t_spo2, t_upper_hr, t_lower_hr = thresholds
+            is_off_threshold = False
+            
+            vitals_to_check = ["SBP", "DBP", "HR", "SPO2"]
+            
+            for vital in vitals_to_check:
+                self.cursor.execute("""
+                    SELECT AVG(nd.Mean)
+                    FROM DATA d
+                    JOIN NUMERICAL_DATA nd ON d.IdData = nd.IdNumData
+                    WHERE d.IdPatient = ? 
+                    AND d.NameData = ?
+                    AND d.Date BETWEEN ? AND ?
+                """, (id_patient, vital, test_start_date, test_end_date))
+                
+                result = self.cursor.fetchone()
+                
+                if result and result[0] is not None:
+                    avg_value = result[0]
+                    
+                    if vital == "HR" and (avg_value > t_upper_hr or avg_value < t_lower_hr):
+                        is_off_threshold = True
+                    elif vital == "SPO2" and avg_value < t_spo2:
+                        is_off_threshold = True
+                    elif vital == "DBP" and avg_value < t_dbp:
+                        is_off_threshold = True
+                    elif vital == "SBP" and avg_value > t_sbp:
+                        is_off_threshold = True
+                        
+                if is_off_threshold:
+                    break
+
+            if is_off_threshold:
+                new_risk = min(current_risk + 1 if current_risk is not None else 1, 4)
+                
+                self.cursor.execute("""
+                    UPDATE PATIENT_CLINICALDATA
+                    SET RiskCode = ?, LastUpdate = ?
+                    WHERE IdPatient = ?
+                """, (new_risk, today, id_patient))
+                
+                print(f"Patient {id_patient}: Threshold breached! Risk increased to {new_risk}. LastUpdate set to real-today ({today}).")
+            else:
+                self.cursor.execute("""
+                    UPDATE PATIENT_CLINICALDATA
+                    SET LastUpdate = ?
+                    WHERE IdPatient = ?
+                """, (today, id_patient))
+                print(f"Patient {id_patient}: Cleared. No breaches. LastUpdate set to real-today ({today}).")
+                
+        self.conn.commit()
+        print("Algorithm execution finished.")
 
     # ==========================
     # ------ APPOINTMENTS ------
@@ -1046,12 +1128,119 @@ class DoctorApp():
                                 command = lambda : self.pat_exams())
         exams.grid(row=0, column=6, padx=(5,5),pady=10,sticky="e")
 
-        message = ctk.CTkButton(row, text="Message", width=70, corner_radius=20, text_color=COLORS["testo_scuro"], 
+        pathologies = ctk.CTkButton(row, text="Pathology", width=70, corner_radius=20, text_color=COLORS["testo_scuro"], 
                                 fg_color=COLORS["bottone_grigio"], hover_color=self.risk_code(self.code),
-                                command = lambda : self.message(self.IDPat))
-        message.grid(row=0, column=7, padx=(5,30),pady=10,sticky="e")
+                                command = lambda : self.pat_pathologies())
+        pathologies.grid(row=0, column=7, padx=(5,30),pady=10,sticky="e")
 
         row.grid_columnconfigure(3,weight=1)
+
+    def pat_pathologies(self):
+        query = """SELECT path.IDPathology, path.Name, path.Code, up.Date
+                FROM User_Pathologies AS up
+                JOIN Pathology AS path ON up.IDPathology = path.IDPathology
+                WHERE up.IDPatient = ?"""
+        
+        self.cursor.execute(query, (self.IDPat,))
+        pathologies = self.cursor.fetchall()
+
+        for widget in self.vitals.winfo_children():
+            widget.destroy()
+
+        row = ctk.CTkFrame(self.vitals, fg_color="transparent", corner_radius=20)
+        row.place(x=20, y=20, relwidth=0.95)
+
+        text = ctk.CTkLabel(row, text="Pathologies", font=FONTS["titolo"], text_color=COLORS["testo_scuro"])
+        text.grid(row=0, column=1, padx=15, pady=10, sticky="w")
+        
+        self.exams_area = ctk.CTkScrollableFrame(self.vitals, fg_color="transparent", corner_radius=20)
+        self.exams_area.place(x=10,y=70, relheight=0.85, relwidth=0.98)
+
+        add = ctk.CTkButton(row, text="+ Add", width=70, corner_radius=20, text_color=COLORS["testo_scuro"], 
+                                 fg_color=COLORS["bottone_grigio"], hover_color=self.risk_code(self.code),
+                                 command = lambda : self.add_pathology())
+        add.grid(row=0, column=2, padx=(15,50),pady=10,sticky="e")
+        
+        row.grid_columnconfigure(1, weight=1)
+        
+        for p in pathologies:
+            idpath, name, code, date = p
+            row = ctk.CTkFrame(self.exams_area, fg_color="transparent")
+            row.pack(fill='x',padx=0, pady=0)
+
+            label_name = ctk.CTkLabel(row, text=name, anchor = "w",font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"], width=250)
+            label_name.grid(row=0,column=0, padx=15, pady=10, sticky="w")
+
+            label_code = ctk.CTkLabel(row, text=f"({code})", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"], width=75, anchor="w")
+            label_code.grid(row=0,column=1, padx=15, pady=10, sticky="w")
+
+            label_date = ctk.CTkLabel(row, text=f"Diagnosed on {date}", font=FONTS["testo_normale"], text_color=COLORS["testo_chiaro"])
+            label_date.grid(row=0,column=2, padx=15, pady=10, sticky="w")
+
+            download = ctk.CTkButton(row, text="Remove", width=70, corner_radius=20, text_color=COLORS["testo_scuro"], 
+                                 fg_color=COLORS["bottone_grigio"], hover_color=self.risk_code(self.code),
+                                 command = lambda id=idpath: self.remove_pathology(id))
+            download.grid(row=0, column=3, padx=(15,50),pady=10,sticky="e")
+            
+            row.grid_columnconfigure(2, weight=1)
+        
+    def remove_pathology(self, id):
+        query = """
+                DELETE FROM User_Pathologies 
+                WHERE IDPatient = ? AND IDPathology = ?
+                """
+        self.cursor.execute(query, (self.IDPat, id))
+        self.conn.commit()
+
+        self.pat_pathologies()
+
+    def add_pathology(self):
+        self.edit_window = ctk.CTkToplevel(self.root)
+        self.edit_window.geometry("400x300")
+        self.edit_window.configure(fg_color=COLORS["bottone_grigio"])
+
+        title = ctk.CTkLabel(self.edit_window, text="Add Pathology", font=FONTS["titolo"], text_color=COLORS["testo_scuro"])
+        title.place(x=30, y=25)
+
+        dot_code = ctk.CTkFrame(self.edit_window, width=24, height=24, corner_radius=12, fg_color=self.risk_code(self.code))
+        dot_code.place(x=346, y=30)
+                     
+        start_date = ctk.CTkLabel(self.edit_window, text="Diagnosed on", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"])
+        start_date.place(x=30, y=80, anchor="w")
+        entry_start = ctk.CTkLabel(self.edit_window, width=340,corner_radius=5,anchor="w", text=f"{datetime.today()}"[:10], font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"],fg_color=COLORS["bianco_puro"])
+        entry_start.place(x=30, y=105)
+
+        query = "SELECT Name FROM Pathology"
+        self.cursor.execute(query)
+        results = self.cursor.fetchall()
+
+        path = [r[0] for r in results] 
+        
+        vitals = ctk.CTkLabel(self.edit_window, text="Pathologies", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"])
+        vitals.place(x=30, y=150, anchor="w")
+        menu = ctk.CTkOptionMenu(self.edit_window, width=340, values=path, fg_color=COLORS["bianco_puro"], font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"], button_color=COLORS["bianco_puro"],button_hover_color=self.risk_code(self.code))
+        menu.place(x=30, y=165)
+        
+        self.output_add = ctk.CTkLabel(self.edit_window, width=300,text="", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"])
+        self.output_add.place(x=50, y=250)
+
+        save = ctk.CTkButton(self.edit_window, text="+ Add", width=100, corner_radius=20, fg_color=COLORS["bianco_puro"], text_color=COLORS["testo_scuro"], hover_color=self.risk_code(self.code),
+                            command = lambda : self.save_pathology(entry_start.cget("text"), menu.get()))
+        save.place(x=150, y = 250)
+        
+    def save_pathology(self, date, name):
+        self.cursor.execute("SELECT IDPathology FROM Pathology WHERE Name = ?",(name,))
+        result = self.cursor.fetchone()
+
+        insert_query = """
+            INSERT INTO User_Pathologies (IDPatient, IDPathology, Date)
+            VALUES (?, ?, ?)
+            """
+            
+        self.cursor.execute(insert_query, (self.IDPat, result[0], date))
+        self.conn.commit()
+
+        self.pat_pathologies()
 
     def update_wh(self):
         self.edit_window = ctk.CTkToplevel(self.root)
@@ -1217,7 +1406,8 @@ class DoctorApp():
         self.output.destroy()
         self.output_date.destroy()
 
-        print(vit)
+        thr = self.get_threshold()
+
         if vit not in ("SleepHours", "StepCount"):
             shift = 0
             if time == "Day":
@@ -1238,7 +1428,6 @@ class DoctorApp():
             if self.btn_night:
                 self.btn_night.destroy()
 
-
         fig = Figure(figsize=(8.5, 4),facecolor="none") 
         
         ax = fig.add_subplot(111)       
@@ -1247,6 +1436,18 @@ class DoctorApp():
         ax.plot(data["dates"], data["mean"], color=self.risk_code(self.code), linewidth=3)
         ax.fill_between(data["dates"], data["min"], data["max"], color=self.risk_code(self.code), alpha=0.2, edgecolor='none')
         
+        line_style = {"color": self.risk_code(self.code), "linestyle": "--", "linewidth": 1.5, "alpha": 0.7}
+        
+        if vit == "SBP":
+            ax.axhline(y=thr[0], **line_style)
+        elif vit == "DBP":
+            ax.axhline(y=thr[1], **line_style)
+        elif vit == "SPO2":
+            ax.axhline(y=thr[2], **line_style)
+        elif vit == "HR":
+            ax.axhline(y=thr[3], **line_style)
+            ax.axhline(y=thr[4], **line_style)
+
         ax.tick_params(axis="x", colors=COLORS["testo_scuro"], labelsize=10, labelbottom=True)
         ax.tick_params(axis="y", colors=COLORS["testo_scuro"], labelsize=10)
         
@@ -1318,9 +1519,9 @@ class DoctorApp():
 
         self.index = 0
     
-    def get_ecg(self, date):
+    def get_ecg(self, date):    
 
-        query = """SELECT CAST(S.Value AS BLOB), S.Sampling_Freq 
+        query = """SELECT CAST(S.Value AS TEXT), S.Sampling_Freq 
                 FROM SIGNALS S
                 JOIN DATA as D ON S.IdSignals = D.IdData
                 WHERE D.IdPatient = ? 
@@ -1331,17 +1532,13 @@ class DoctorApp():
         self.cursor.execute(query, (self.IDPat, date[:10], date[-5:]))
         record = self.cursor.fetchall()[0]
         
-        blob_data = record[0]
-        sampling_freq = record[1]
+        csv_data = record[0]
+        sampling_freq = record[1] 
 
-        num_floats = len(blob_data) // 4
-        
-        self.y = list(struct.unpack(f"{num_floats}f", blob_data))
-
-        self.x = [round(i * (1.0/sampling_freq), 2) for i in range(len(self.y))]
+        self.y = [float(valore) for valore in csv_data.split(',')]
+        self.x = [round(i * (1.0 / sampling_freq), 2) for i in range(len(self.y))]
 
         self.date = date
-        print(len(self.x))
 
         self.plot_ecg()
 
@@ -1357,8 +1554,8 @@ class DoctorApp():
                                         fg_color=COLORS["bottone_grigio"], text_color=COLORS["testo_scuro"],command=lambda: self.update_index("R"))
         self.right.place(x=80, y=70)
 
-        x = self.x[500*self.index:500*(self.index+1)]
-        y = self.y[500*self.index:500*(self.index+1)]
+        x = self.x[1542*self.index:1542*(self.index+1)]
+        y = self.y[1542*self.index:1542*(self.index+1)]
         
         date = self.date
 
@@ -1412,8 +1609,8 @@ class DoctorApp():
         if self.index <= 0:
             self.index = 0
         
-        if self.index >= 11:
-            self.index = 11
+        if self.index >= 9:
+            self.index = 9
 
         self.plot_ecg()
 
@@ -1778,7 +1975,12 @@ class DoctorApp():
         self.edit_window = ctk.CTkToplevel(self.root)
         self.edit_window.geometry("400x480")
         self.edit_window.configure(fg_color=COLORS["bottone_grigio"])
-        self.edit_window.protocol("WM_DELETE_WINDOW", self.edit_window.destroy())
+
+        def on_close_popup():
+            self.btn_support.configure(fg_color=COLORS["bottone_grigio"],image=self.img_support)
+            self.edit_window.destroy()
+
+        self.edit_window.protocol("WM_DELETE_WINDOW", on_close_popup)
 
         date = f"{datetime.today()}"[:10]
 
@@ -1820,7 +2022,7 @@ class DoctorApp():
         self.cursor.execute(query, (date, reqtype, self.ID[0], 1, msg))
         self.conn.commit()
 
-        self.output_add.configure(text="Support Request sent", text_color="green")
+        self.output_add.configure(text="Support Request sent", text_color=self.risk_code(1))
 
 
     # ===========================
@@ -2185,5 +2387,5 @@ class DoctorApp():
     def mostra_profilo(self):
         print("Profilo")
 
-ID = (3,)
-DoctorApp(ID)
+#ID = (3,)
+#DoctorApp(ID)
