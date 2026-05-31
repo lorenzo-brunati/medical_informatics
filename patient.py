@@ -1784,7 +1784,7 @@ class PatientApp():
     # Seleziono il percorso del report da scaricare e apro una finestra di conferma
     def download_report(self, path, date):
             
-            self.path = path[0]
+            self.path = path
 
             self.edit_window = self.open_popup()
             self.edit_window.geometry("400x350")
