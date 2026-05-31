@@ -163,6 +163,7 @@ class PatientApp():
         self.btn_profile = self.crea_tasto_icona(self.icon_profile, "Profile")
 
         # Partiamo dalla Dashboard
+        self.current = "Dashboard"
         self.cambia_pagina("Dashboard")
 
     def crea_tasto_icona(self, icona, nome):
@@ -182,6 +183,8 @@ class PatientApp():
 
         self.current_page_frame = ctk.CTkFrame(self.root, fg_color=COLORS["sfondo_grigino"])
         self.current_page_frame.place(relx=0, rely=0.12, relwidth=1, relheight=0.88)
+
+        self.current = nome
         
         # Riporto tutti i bottoni (testo e icone) allo stato grigio/scuro tranne quelli che sono stati cliccati, quelli diventano blu con testo bianco o icona chiara a seconda del caso
         for chiave,b in self.menu_buttons.items():
@@ -870,7 +873,11 @@ class PatientApp():
 
 
     # Salvo il messaggio nel database, così posso gestire tutto in un secondo momento nell'apposita sezione
-    def send_message(self, id_sender, id_receiver, date, time, msg):
+    def send_message(self, id_sender, id_receiver, date, time, msg, is_app):
+
+        if is_app:
+            msg = f"[Related to the following appointment: {date} - {time}]: {msg}"
+
 
         # Query di inserimento nel Database
         query = """INSERT INTO NOTIFICATION (IdSender, IdReceiver, Date, Time, Message)
@@ -889,7 +896,9 @@ class PatientApp():
             # Fondamentale per salvare le modifiche nel database
             self.conn.commit() 
             self.output_add.configure(text="Message sent successfully", text_color='green')
-            self.mostra_messaggi()
+
+            if self.current == "Messages":
+                self.mostra_messaggi()
             
         except Exception as e:
             self.output_add.configure(text=f"Error: {e}", text_color='red')
@@ -1635,7 +1644,7 @@ class PatientApp():
         
         # Definisco un testo predefinito legatto all'appuntamento, così l'utente può semplicemente modificare quello se vuole aggiungere qualcosa, invece di scrivere tutto da zero, e il medico capisce subito a cosa si riferisce la nota senza doverla contestualizzare con l'appuntamento
         save = ctk.CTkButton(self.edit_window, text="Send", width=100, corner_radius=20, fg_color=COLORS["blu_acceso"], text_color=COLORS["bianco_puro"], font = FONTS["testo_bold"], hover_color=COLORS["bordi"],
-                             command=lambda: self.send_message(self.p_id, self.doctor_id, date, time, final_msg=f"[Related to the the following appointment {app[1]}  - {app[2]}]: {raw_msg}\n"))
+                             command=lambda: self.send_message(self.p_id, self.doctor_id, date, time, raw_msg, True))
         
         save.place(x=150, y = 470)
 
@@ -1988,7 +1997,7 @@ class PatientApp():
                     FROM notification AS msg
                     WHERE (msg.IdSender = ? OR msg.IdReceiver = ?)
                     AND (CASE WHEN msg.IdSender = ? THEN msg.IdReceiver ELSE msg.IdSender END) = ?
-                    ORDER BY msg.Date DESC, msg.Time DESC
+                    ORDER BY msg.Date DESC, msg.Time DESC, msg.IdNotification DESC
                 """
             
         self.cursor.execute(query, (self.p_id, self.p_id, self.p_id, self.p_id, self.doctor_id))
