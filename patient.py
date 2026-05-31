@@ -1635,7 +1635,7 @@ class PatientApp():
         
         # Definisco un testo predefinito legatto all'appuntamento, così l'utente può semplicemente modificare quello se vuole aggiungere qualcosa, invece di scrivere tutto da zero, e il medico capisce subito a cosa si riferisce la nota senza doverla contestualizzare con l'appuntamento
         save = ctk.CTkButton(self.edit_window, text="Send", width=100, corner_radius=20, fg_color=COLORS["blu_acceso"], text_color=COLORS["bianco_puro"], font = FONTS["testo_bold"], hover_color=COLORS["bordi"],
-                             command=lambda: self.send_message(self.p_id, self.id_doctor, date, time, final_msg=f"[Related to the the following appointment {app[1]}  - {app[2]}]: {raw_msg}\n"))
+                             command=lambda: self.send_message(self.p_id, self.doctor_id, date, time, final_msg=f"[Related to the the following appointment {app[1]}  - {app[2]}]: {raw_msg}\n"))
         
         save.place(x=150, y = 470)
 
