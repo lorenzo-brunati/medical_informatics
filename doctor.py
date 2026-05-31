@@ -57,6 +57,9 @@ VITALS = {
     "VO2max": "VO2Max"
 }
 
+# Setto Montserrat come font di default per tutto il programma
+ctk.ThemeManager.theme["CTkFont"]["family"] = "Montserrat"
+
 class DoctorApp():
     def __init__(self, ID):
         
