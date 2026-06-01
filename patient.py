@@ -19,7 +19,6 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 
-from login import LoginApp
         
 # --- I MIEI COLORI ---
 # Li tengo qui così se mi stufo del blu cambio solo una riga
@@ -59,8 +58,8 @@ UNITS = {
 ctk.ThemeManager.theme["CTkFont"]["family"] = "Montserrat"
 
 class PatientApp():
-    def __init__(self, username):
-        self.user = username
+    def __init__(self, ID):
+        self.p_id = ID
         
         # Database e finestra principale
         self.conn = sql.connect("database.db")
@@ -74,14 +73,14 @@ class PatientApp():
         self.profile_page_frame = None
 
         # Recupero le informazioni personali dal database
-        self.cursor.execute("SELECT Id, Name, Surname, BirthDate, Address, PhoneNumber, Email, Username, Password, FiscalCode FROM user WHERE username = ?", (self.user[0],))
+        self.cursor.execute("SELECT Name, Surname, BirthDate, Address, PhoneNumber, Email, Username, Password, FiscalCode FROM user WHERE Id = ?", (self.p_id,))
         self.user_data = self.cursor.fetchone()
 
-        self.p_id = self.user_data[0]
-        self.patient_name = self.user_data[1]
-        self.patient_surname = self.user_data[2]
-        self.patient_birthdate = self.user_data[3]
-        self.patient_fiscal_code = self.user_data[9]
+        self.patient_name = self.user_data[0]
+        self.patient_surname = self.user_data[1]
+        self.patient_birthdate = self.user_data[2]
+        self.user = self.user_data[6]
+        self.patient_fiscal_code = self.user_data[8]
         self.patient_age = self.get_age()[0]
 
         self.doctor = self.get_doctor()
@@ -129,7 +128,7 @@ class PatientApp():
         self.topbar.place(x=0, y=0)
 
         # Prendo il nome dal database
-        self.cursor.execute("SELECT name FROM user WHERE username = ?", self.user)
+        self.cursor.execute("SELECT name FROM user WHERE username = ?", (self.user,))
         res = self.cursor.fetchone()
         nome_utente = res[0] if res else "User"
 
@@ -570,6 +569,7 @@ class PatientApp():
         elif nome == "Logout":
             risposta = messagebox.askyesno("Log-out", "Are you sure you want to log out?")
             if risposta:
+                from login import LoginApp
                 self.root.destroy()
                 LoginApp()
 
@@ -680,10 +680,8 @@ class PatientApp():
             password_inserita = current_pw_entry.get().strip()
             
             if not nuovo_valore:
-                # Evita di salvare campi vuoti se sono obbligatori
                 return 
 
-            # Dizionario per mappare la Label dell'interfaccia con il nome reale della colonna nel Database
             from_labels_to_db = {
                 "Address": "Address",
                 "Phone Number": "PhoneNumber",
@@ -693,92 +691,71 @@ class PatientApp():
             
             nome_colonna_db = from_labels_to_db.get(nome_campo)
             
-            # Prepariamo l'hash del database assicurandoci che sia in formato bytes
-            hash_db = self.user_data[8].encode('utf-8') if isinstance(self.user_data[8], str) else self.user_data[8]
+            hash_db = self.user_data[8]
+            if isinstance(hash_db, str):
+                hash_db = hash_db.encode('utf-8')
 
-            #per ciò che non è password mi basta che la password inserita sia corretta, per la password invece chiedo anche di confermare il nuovo valore inserito
+            try:
+                password_corretta = bcrypt.checkpw(password_inserita.encode('utf-8'), hash_db)
+            except ValueError:
+                password_corretta = (password_inserita == self.user_data[8])
+
+            if not password_corretta:
+                if hasattr(popup, "errore_label") and popup.errore_label:
+                    popup.errore_label.destroy()
+                popup.errore_label = ctk.CTkLabel(popup.error_container, text="Incorrect current password.", font=FONTS["testo_normale"], text_color="red")
+                popup.errore_label.pack()
+                return
+
             if nome_colonna_db != "Password":
-                # Utilizzo checkpw per verificare la password inserita a schermo con l'hash presente nel DB
-                if not bcrypt.checkpw(password_inserita.encode('utf-8'), hash_db):
-                    # La password inserita non corrisponde a quella attuale
-
-                    # Se la label esiste già, la cancello (così non si accumulano messaggi di errore se l'utente sbaglia più volte)
+                try:
+                    self.cursor.execute(f"UPDATE user SET {nome_colonna_db} = ? WHERE username = ?", (nuovo_valore, self.user[0]))
+                    self.conn.commit() 
+                    
                     if hasattr(popup, "errore_label") and popup.errore_label:
                         popup.errore_label.destroy()
-
-                    popup.errore_label = ctk.CTkLabel(popup.error_container, text="Incorrect current password.", font=FONTS["testo_normale"], text_color="red")
+                    popup.errore_label = ctk.CTkLabel(popup.error_container, text="Aggiornamento completato con successo", font=FONTS["testo_normale"], text_color="green")
+                    popup.errore_label.pack() 
+                    print(f"Database aggiornato con successo: {nome_colonna_db}")
+                    
+                except sql.Error as e:
+                    if hasattr(popup, "errore_label") and popup.errore_label:
+                        popup.errore_label.destroy()
+                    popup.errore_label = ctk.CTkLabel(popup.error_container, text=f"Errore DB: {e}", font=FONTS["testo_normale"], text_color="red")
                     popup.errore_label.pack()
-                    return
-                else:
-                    try:
-                        # Query di UPDATE dinamica usando f-string SOLO per la colonna (per cui non posso usare i placeholder)
-                        # Sfruttiamo try per gestire eventuali errori (es. connessione al DB, colonna inesistente, ecc.)
-                        self.cursor.execute(f"UPDATE user SET {nome_colonna_db} = ? WHERE username = ?", (nuovo_valore, self.user[0]))
-                        self.conn.commit() # Salva i dati sul file .db
-                        
-                        if hasattr(popup, "errore_label") and popup.errore_label:
-                            popup.errore_label.destroy()
-
-                        popup.errore_label = ctk.CTkLabel(popup.error_container, text="Aggiornamento completato con successo", font=FONTS["testo_normale"], text_color="green")
-                        popup.errore_label.pack() 
-            
-                        print(f"Database aggiornato con successo: {nome_colonna_db}")
-                        
-                    except sql.Error as e:
-                        # Gestisco eventuali errori avvisando l'utente e stampando l'errore specifico per il debug
-                        if hasattr(popup, "errore_label") and popup.errore_label:
-                            popup.errore_label.destroy()
-
-                        popup.errore_label = ctk.CTkLabel(popup.error_container, text=f"Errore durante l'aggiornamento del DB: {e}", font=FONTS["testo_normale"], text_color="red")
-                        popup.errore_label.pack()
 
             elif nome_colonna_db == "Password":
                 valore_conferma = confirm_input.get().strip()
-                # Utilizzo checkpw anche qui per verificare la validità della sessione corrente
-                if not bcrypt.checkpw(password_inserita.encode('utf-8'), hash_db):
-
-                    # Se la label esiste già, la cancello
+                
+                if nuovo_valore != valore_conferma:
                     if hasattr(popup, "errore_label") and popup.errore_label:
                         popup.errore_label.destroy()
-
-                    popup.errore_label =ctk.CTkLabel(popup.error_container, text="Incorrect current password.", font=FONTS["testo_normale"], text_color="red")
-                    popup.errore_label.pack()
+                    popup.errore_label = ctk.CTkLabel(popup.error_container, text="New passwords do not match.", font=FONTS["testo_normale"], text_color="red")
+                    popup.errore_label.pack() 
                     return
                 else:
-                    if nuovo_valore != valore_conferma:
-
+                    try:
+                        nuovo_hash = bcrypt.hashpw(nuovo_valore.encode('utf-8'), bcrypt.gensalt())
+                        
+                        self.cursor.execute(f"UPDATE user SET {nome_colonna_db} = ? WHERE username = ?", (nuovo_hash, self.user[0]))
+                        self.conn.commit()
+                        
+                        lista_dati = list(self.user_data)
+                        lista_dati[8] = nuovo_hash.decode('utf-8')
+                        self.user_data = tuple(lista_dati)
+                        
                         if hasattr(popup, "errore_label") and popup.errore_label:
                             popup.errore_label.destroy()
-
-                        popup.errore_label = ctk.CTkLabel(popup.error_container, text="New passwords do not match.", font=FONTS["testo_normale"], text_color="red")
+                        popup.errore_label = ctk.CTkLabel(popup.error_container, text="Password updated successfully", font=FONTS["testo_normale"], text_color="green")
+                        popup.errore_label.pack()
+                        
+                    except sql.Error as e:
+                        if hasattr(popup, "errore_label") and popup.errore_label:
+                            popup.errore_label.destroy()
+                        popup.errore_label = ctk.CTkLabel(popup.error_container, text=f"Error updating password: {e}", font=FONTS["testo_normale"], text_color="red")
                         popup.errore_label.pack() 
                         return
-                    else:
-                        try:
-                            # Genero il nuovo hash sicuro a partire dalla nuova password scelta
-                            nuovo_hash = bcrypt.hashpw(nuovo_valore.encode('utf-8'), bcrypt.gensalt())
-                            
-                            # Eseguo l'UPDATE passando l'hash appena calcolato al posto del testo in chiaro
-                            self.cursor.execute(f"UPDATE user SET {nome_colonna_db} = ? WHERE username = ?", (nuovo_hash, self.user[0]))
-                            self.conn.commit()
-                            
-                            # Aggiorno la cache locale dell'utente per evitare che i controlli successivi falliscano
-                            self.user_data[8] = nuovo_hash
-                            
-                            if hasattr(popup, "errore_label") and popup.errore_label:
-                                popup.errore_label.destroy()
-                            popup.errore_label = ctk.CTkLabel(popup.error_container, text="Password updated successfully", font=FONTS["testo_normale"], text_color="green")
-                            popup.errore_label.pack()
-                            
-                        except sql.Error as e:
-                            if hasattr(popup, "errore_label") and popup.errore_label:
-                                popup.errore_label.destroy()
-                        
-                            popup.errore_label = ctk.CTkLabel(popup.error_container, text=f"Error updating password: {e}", font=FONTS["testo_normale"], text_color="red")
-                            popup.errore_label.pack() 
-                            return
-                
-            # Rinfresca la pagina del profilo così l'utente vede subito il nuovo dato
+                    
             self.cambia_pagina_profilo("Personal Info")
 
         # Creo un container per i messaggi di errore/successo, così si posizionano sempre nello stesso punto e non spostano il layout se appaiono
@@ -876,8 +853,10 @@ class PatientApp():
     def send_message(self, id_sender, id_receiver, date, time, msg, is_app):
 
         if is_app:
-            msg = f"[Related to the following appointment: {date} - {time}]: {msg}"
+            new_msg = f"[Related to the following appointment: {date} - {time}]: {msg}"
 
+        else:
+            new_msg =  msg
 
         # Query di inserimento nel Database
         query = """INSERT INTO NOTIFICATION (IdSender, IdReceiver, Date, Time, Message)
@@ -890,7 +869,7 @@ class PatientApp():
                 id_receiver,
                 date,
                 time,
-                msg
+                new_msg
             ))
             
             # Fondamentale per salvare le modifiche nel database
@@ -1159,7 +1138,7 @@ class PatientApp():
         self.output_add.place(x=50, y=430)
 
         save = ctk.CTkButton(self.edit_window, text="Send", width=100, corner_radius=20, fg_color=COLORS["blu_acceso"],font=FONTS["testo_bold"], text_color=COLORS["bianco_puro"],
-                             command=lambda: self.send_message(sender, receiver, date, time, entry_textbox.get("1.0", "end-1c")))
+                             command=lambda: self.send_message(sender, receiver, date, time, entry_textbox.get("1.0", "end-1c"), False))
         
         save.place(x=150, y = 470)
 
@@ -1644,7 +1623,7 @@ class PatientApp():
         
         # Definisco un testo predefinito legatto all'appuntamento, così l'utente può semplicemente modificare quello se vuole aggiungere qualcosa, invece di scrivere tutto da zero, e il medico capisce subito a cosa si riferisce la nota senza doverla contestualizzare con l'appuntamento
         save = ctk.CTkButton(self.edit_window, text="Send", width=100, corner_radius=20, fg_color=COLORS["blu_acceso"], text_color=COLORS["bianco_puro"], font = FONTS["testo_bold"], hover_color=COLORS["bordi"],
-                             command=lambda: self.send_message(self.p_id, self.doctor_id, date, time, raw_msg, True))
+                             command=lambda: self.send_message(self.p_id, self.doctor_id, date, time, entry_textbox.get("1.0", "end-1c"), True))
         
         save.place(x=150, y = 470)
 
@@ -1793,7 +1772,7 @@ class PatientApp():
     # Seleziono il percorso del report da scaricare e apro una finestra di conferma
     def download_report(self, path, date):
             
-            self.path = path
+            self.path = path[0]
 
             self.edit_window = self.open_popup()
             self.edit_window.geometry("400x350")
@@ -2076,6 +2055,3 @@ class PatientApp():
     def mostra_placeholder(self, nome):
         ctk.CTkLabel(self.current_page_frame, text=f"{nome} page content goes here.", font=FONTS["testo_bold"], text_color=COLORS["testo_scuro"]).place(relx=0.5, rely=0.5, anchor="center")
 
-#LoginApp()
-user = ("alombardi",)
-PatientApp(user)

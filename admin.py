@@ -1,6 +1,7 @@
 import sqlite3 as sql
 import customtkinter as ctk
 import PIL.Image
+from tkinter import messagebox
 
 COLORS = {
     "sfondo_grigino": "#E8EBF2",
@@ -20,9 +21,6 @@ FONTS = {
     "micro_bold": ("Montserrat", 8, "bold")
 }
 
-# Setto Montserrat come font di default per tutto il programma
-ctk.ThemeManager.theme["CTkFont"]["family"] = "Montserrat"
-
 class AdminApp(ctk.CTk):
 
     def carica_icone(self):
@@ -33,17 +31,15 @@ class AdminApp(ctk.CTk):
         self.icon_profile_light = ctk.CTkImage(light_image=PIL.Image.open("Icons/light_user.png"), size=(20, 20))
 
     def __init__(self, ID):
-        
-        super().__init__()
 
+        super().__init__()
+        
         self.buttons_dict = {}
 
         self.ID = ID
         self.conn = sql.connect("database.db")
         self.cursor = self.conn.cursor()
 
-
-        #self.root = ctk.CTk()
         self.title("AdminApp")
         self.geometry("1250x725")
 
@@ -51,6 +47,7 @@ class AdminApp(ctk.CTk):
 
         self.carica_icone()
         self.setup_gui()
+        self.mainloop()
     
     def setup_gui(self):
 
@@ -84,13 +81,13 @@ class AdminApp(ctk.CTk):
 
 
         self.side_frame = ctk.CTkFrame(self.topbar, fg_color="transparent")
-        self.side_frame.place(x=1064, y=26)
+        self.side_frame.place(x=1100, y=40)
 
         btn1 = ctk.CTkButton(self.side_frame, text="Profile", image=self.icon_profile, width=38, height=38, corner_radius=19,
                             fg_color=COLORS["bottone_grigio"], border_width=2, border_color=COLORS["bordi"],
                             hover_color=COLORS["bordi"], text_color=COLORS["testo_scuro"], 
                             command=lambda : self.profile(self.ID))
-        btn1.pack(side="left", padx=5)
+        btn1.pack(side="left", padx=10)
 
         self.main = ctk.CTkFrame(self, fg_color="transparent")
         self.main.place(relx=0, rely=0.15, relheight=0.85, relwidth=1) 
@@ -158,7 +155,7 @@ class AdminApp(ctk.CTk):
     def support(self):    
         
         self.container_richieste = ctk.CTkFrame(self.main, fg_color=COLORS["bianco_puro"], corner_radius=20)
-        self.container_richieste.place(relx=0.03, rely=0.03, relwidth=0.455, relheight=0.94)
+        self.container_richieste.place(relx=0.515, rely=0.03, relwidth=0.455, relheight=0.94)
 
         
         self.titolo = ctk.CTkLabel(self.container_richieste, text="Manage Requests", font=FONTS["titolo"])
@@ -171,7 +168,7 @@ class AdminApp(ctk.CTk):
 
         ctk.CTkLabel(self.header_frame, text="Surname", text_color=COLORS["testo_scuro"], font=FONTS["testo_bold"]).place(x=105, rely=0.5, anchor='w')
 
-        ctk.CTkLabel(self.header_frame, text="Type", text_color=COLORS["testo_scuro"], font=FONTS["testo_bold"]).place(x=225, rely=0.5, anchor='w')
+        ctk.CTkLabel(self.header_frame, text="Type", text_color=COLORS["testo_scuro"], font=FONTS["testo_bold"]).place(x=215, rely=0.5, anchor='w')
 
         ctk.CTkLabel(self.header_frame, text="ID_Request", text_color=COLORS["testo_scuro"], font=FONTS["testo_bold"]).place(x=330, rely=0.5, anchor='w')
 
@@ -182,7 +179,7 @@ class AdminApp(ctk.CTk):
     def user(self):
         #User List 
         self.user_list = ctk.CTkFrame(self.main, fg_color = COLORS["bianco_puro"], corner_radius=20)
-        self.user_list.place(relx=0.515, rely=0.03, relwidth=0.455, relheight=0.94)
+        self.user_list.place(relx=0.03, rely=0.03, relwidth=0.455, relheight=0.94)
 
         self.user_title = ctk.CTkLabel(self.user_list, text="Users List", font=FONTS["titolo"])
         self.user_title.place(x=30, y=25)
@@ -238,7 +235,7 @@ class AdminApp(ctk.CTk):
                                    text_color=COLORS["testo_scuro"], fg_color=COLORS["bottone_grigio"], 
                                    hover_color=COLORS["blu_acceso"], font=FONTS["testo_normale"], 
                                    command=lambda u_id=user_id: self.delete_btn_user(u_id))
-            delete.grid(row=0, column=6, padx=(5,15), pady=10, sticky="e")
+            delete.grid(row=0, column=5, padx=(5,15), pady=10, sticky="e")
 
             row.grid_columnconfigure((2,3,4), weight=1, uniform="group1")
 
@@ -285,10 +282,10 @@ class AdminApp(ctk.CTk):
                         text_color=COLORS["testo_scuro"], width=110, anchor="w").place(x=115, rely=0.5, anchor='w')
 
             ctk.CTkLabel(row, text=tipo, font=FONTS["testo_normale"], 
-                        text_color=COLORS["testo_chiaro"], width=110, anchor="w").place(x=235, rely=0.5, anchor='w')
+                        text_color=COLORS["testo_chiaro"], width=150, anchor="w").place(x=215, rely=0.5, anchor='w')
 
             ctk.CTkLabel(row, text=id_req, font=FONTS["testo_normale"], 
-                        text_color=COLORS["testo_scuro"], width=50, anchor="center").place(x=355, rely=0.5, anchor='w')
+                        text_color=COLORS["testo_scuro"], width=30, anchor="center").place(x=365, rely=0.5, anchor='w')
 
             ctk.CTkLabel(row, text=date, font=FONTS["testo_normale"], 
                         text_color=COLORS["testo_scuro"], width=100, anchor="w").place(x=430, rely=0.5, anchor='w')
@@ -304,6 +301,18 @@ class AdminApp(ctk.CTk):
                                  hover_color=COLORS["blu_acceso"],
                                 command=lambda i=id_req: self.view(i))
             btn_view.place(x=520, rely=0.5, anchor='w')
+
+            # Lista delle opzioni
+            self.filter_options = ["All", "SupportCredentials", "InconsistentData", "Wearable", "ScheduleIssue", "Others"]
+
+            self.filter_menu = ctk.CTkOptionMenu(
+                self.container_richieste, 
+                values=self.filter_options,
+                fg_color=COLORS["bottone_grigio"],
+                text_color=COLORS["testo_scuro"],
+                command=self.apply_filter 
+            )
+            self.filter_menu.place(x=215, rely=0.2, anchor='w')
 
     def wearables(self):
 
@@ -362,7 +371,7 @@ class AdminApp(ctk.CTk):
                                             text_color=COLORS["testo_scuro"], fg_color=COLORS["bottone_grigio"], 
                                             hover_color=COLORS["blu_acceso"],
                                         command=lambda i=id_p, y=id_w: self.edit_w(i,y))
-                btn_edit.place(x=540, rely=0.5, anchor='w')
+                btn_edit.place(x=565, rely=0.5, anchor='w')
             
             add = ctk.CTkButton(self.wearables_list, text="Add", width=70, corner_radius=20, text_color=COLORS["bianco_puro"], 
                                  fg_color=COLORS["blu_acceso"], hover_color=COLORS["bottone_grigio"], 
@@ -374,7 +383,13 @@ class AdminApp(ctk.CTk):
                                         text_color=COLORS["testo_scuro"], fg_color=COLORS["bottone_grigio"], 
                                         hover_color=COLORS["blu_acceso"],
                                     command=lambda i=id_w: self.associa(i))
-                btn_associa.place(x=535, rely=0.5, anchor='w')
+                btn_associa.place(x=445, rely=0.5, anchor='w')
+
+                btn_delete = ctk.CTkButton(row_w, text="Delete", width=20, font=FONTS["testo_normale"], corner_radius=20, 
+                                        text_color=COLORS["testo_scuro"], fg_color=COLORS["bottone_grigio"], 
+                                        hover_color=COLORS["blu_acceso"],
+                                    command=lambda i=id_w: self.delete_w(i))
+                btn_delete.place(x=560, rely=0.5, anchor='w')
 
 
 ##################################################################
@@ -523,9 +538,76 @@ class AdminApp(ctk.CTk):
         display_text.configure(state="disabled") # Disabilitato per evitare modifiche al messaggio originale
         display_text.place(x=30, y=100)
                      
+    def apply_filter(self, choice):
+            """Filtra le richieste in base al tipo selezionato nel menu"""
+            
+            # 1. Costruiamo la query base
+            query = """
+            SELECT USER.Name, USER.Surname, SUPPORT.SupportType, SUPPORT.IdSupport, SUPPORT.Date
+            FROM SUPPORT 
+            JOIN USER ON SUPPORT.IdRequester = USER.Id 
+            """
+            params = ()
 
+            if choice != "All":
+                query += " WHERE SupportType = ?"
+                params = (choice,)
+                
+            query += " ORDER BY SUPPORT.Date DESC"
 
-    
+            try:
+                self.cursor.execute(query, params)
+                filtered_results = self.cursor.fetchall()
+                
+                # 4. Ricarichiamo la visualizzazione
+                self.display_filtered_requests(filtered_results)
+                
+            except Exception as e:
+                print(f"Errore durante il filtraggio: {e}")
+
+    def display_filtered_requests(self, richieste):
+        """Svuota il frame e mostra solo i dati filtrati"""
+        # Pulizia del frame 
+        for widget in self.scroll_req.winfo_children():
+            widget.destroy()
+
+        for req in richieste:
+            nome, cognome, tipo, id_req, date = req
+            
+            # Creiamo un frame per la riga all'interno dello SCROLLABLE frame
+            # Usiamo un'altezza fissa per mantenere l'ordine
+            row = ctk.CTkFrame(self.scroll_req, fg_color="transparent", height=40)
+            row.pack(fill="x", pady=2) # Spazio tra una riga e l'altra
+
+            row.pack_propagate(False)
+            
+            ctk.CTkLabel(row, text=nome, font=FONTS["testo_normale"], 
+                        text_color=COLORS["testo_scuro"], width=90, anchor="w").place(x=15, rely=0.5, anchor='w')
+
+            ctk.CTkLabel(row, text=cognome, font=FONTS["testo_normale"], 
+                        text_color=COLORS["testo_scuro"], width=110, anchor="w").place(x=115, rely=0.5, anchor='w')
+
+            ctk.CTkLabel(row, text=tipo, font=FONTS["testo_normale"], 
+                        text_color=COLORS["testo_chiaro"], width=110, anchor="w").place(x=215, rely=0.5, anchor='w')
+
+            ctk.CTkLabel(row, text=id_req, font=FONTS["testo_normale"], 
+                        text_color=COLORS["testo_scuro"], width=50, anchor="center").place(x=355, rely=0.5, anchor='w')
+
+            ctk.CTkLabel(row, text=date, font=FONTS["testo_normale"], 
+                        text_color=COLORS["testo_scuro"], width=100, anchor="w").place(x=430, rely=0.5, anchor='w')
+            
+            btn_delete = ctk.CTkButton(row, text="Resolve", width=30, font=FONTS["testo_normale"], corner_radius=20, 
+                                 text_color=COLORS["testo_scuro"], fg_color=COLORS["bottone_grigio"], 
+                                 hover_color=COLORS["blu_acceso"],
+                                command=lambda i=id_req: self.delete_btn_req(i))
+            btn_delete.place(x=590, rely=0.5, anchor='w')
+
+            btn_view = ctk.CTkButton(row, text="View", width=20, font=FONTS["testo_normale"], corner_radius=20, 
+                                 text_color=COLORS["testo_scuro"], fg_color=COLORS["bottone_grigio"], 
+                                 hover_color=COLORS["blu_acceso"],
+                                command=lambda i=id_req: self.view(i))
+            btn_view.place(x=520, rely=0.5, anchor='w')
+ 
     def delete_btn_user(self, user_id):
 
         self.delete_window = ctk.CTkToplevel(self)
@@ -582,6 +664,8 @@ class AdminApp(ctk.CTk):
         role_option = ctk.CTkOptionMenu(
             self.add_window, 
             values=["Doctor", "Patient"], 
+            fg_color=COLORS["bottone_grigio"],
+            text_color=COLORS["testo_scuro"],
             width=320,
             command=lambda choice: self.toggle_patient_fields(choice) # Chiama la funzione al cambio
         )
@@ -612,7 +696,9 @@ class AdminApp(ctk.CTk):
 
         doctor_option = ctk.CTkOptionMenu(
             self.patient_extra_frame, 
-            values=doctor_names if doctor_names else ["No doctors available"], 
+            fg_color=COLORS["bottone_grigio"],
+            values=doctor_names if doctor_names else ["No doctors available"],
+            text_color=COLORS["testo_scuro"],
             width=320
         )
         doctor_option.pack(pady=(0, 10))
@@ -909,33 +995,40 @@ class AdminApp(ctk.CTk):
         entry_w_id.pack(pady=(0, 20))
 
         def save_changes():
-            new_name = entry_name.get()
-            new_surname = entry_surname.get()
-            new_w_id = entry_w_id.get()
-
+            new_w_id = entry_w_id.get().strip()
+            
             try:
+                # 1. CONTROLLO PREVENTIVO: Chi ha questo wearable?
                 self.cursor.execute("""
-                    UPDATE USER 
-                    SET Name = ?, Surname = ?
-                    WHERE Id = ?
-                """, (new_name, new_surname, user_id))
-                
-                self.cursor.execute("""
-                    UPDATE PATIENT_CLINICALDATA 
-                    SET IdWearable = ?
-                    WHERE IdPatient = ?
+                    SELECT U.Name, U.Surname 
+                    FROM USER U
+                    JOIN PATIENT_CLINICALDATA P ON U.Id = P.IdPatient
+                    WHERE P.IdWearable = ? AND P.IdPatient != ?
                 """, (new_w_id, user_id))
                 
+                already_assigned = self.cursor.fetchone()
 
+                if already_assigned:
+                    # Se troviamo qualcuno, mostriamo un messaggio specifico
+                    nome_p, cognome_p = already_assigned
+                    messagebox.showwarning("Warning", 
+                        f"Wearable {new_w_id} is already assigned to:\n{nome_p} {cognome_p}.\n\n"
+                        "Please choose another device.")
+                    return # Interrompiamo qui, non salviamo nulla
+                
+
+                self.cursor.execute("UPDATE PATIENT_CLINICALDATA SET IdWearable = ? WHERE IdPatient = ?", (new_w_id, user_id))
+                
                 self.conn.commit()
-                print("Dati aggiornati con successo!")
-                
-                self.edit_window.destroy() # Chiude la popup
-                self.popola_utenti()       # Ricarica la tabella principale con i nuovi dati
+                self.edit_window.destroy()
+
+                messagebox.showinfo("Success", "Updated successfully!")
+                self.popola_utenti()
                 self.wearables()
-                
+
             except Exception as e:
-                print(f"Errore nel salvataggio: {e}")
+                self.conn.rollback()
+                messagebox.showerror("Error", f"An error occurred: {e}")
 
         # --- BOTTONI ---
         btn_frame = ctk.CTkFrame(self.edit_window, fg_color="transparent")
@@ -948,19 +1041,51 @@ class AdminApp(ctk.CTk):
         cancel_btn = ctk.CTkButton(btn_frame, text="Cancel", fg_color=COLORS["bianco_puro"], 
                                 text_color=COLORS["testo_scuro"], command=self.edit_window.destroy)
         cancel_btn.pack(side="left", padx=10)
+
+    def delete_w(self, w_id):
+        self.delete_window = ctk.CTkToplevel(self)
+        self.delete_window.geometry("400x200")
+        self.delete_window.configure(fg_color=COLORS["bottone_grigio"])
+        self.delete_window.title("Confirm")
+        
+        self.delete_window.grab_set()
+
+        title = ctk.CTkLabel(self.delete_window, text="Delete Wearable", font=FONTS["titolo"], text_color=COLORS["testo_scuro"])
+        title.place(x=30, y=25)
+
+        start_date = ctk.CTkLabel(self.delete_window, text=f"Are you sure to delete this wearable? (ID={w_id})", 
+                                font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"])
+        start_date.place(x=30, y=80, anchor="w")
+
+        def confirm_yes():
+            try:
+                query = "DELETE FROM WEARABLE_DEVICE WHERE IdWearable = ?"
+                self.cursor.execute(query, (w_id,))
+                self.conn.commit()
                 
-    
+                self.delete_window.destroy()
+
+                self.wearables()
+                
+                print(f"Wearable {w_id} eliminato con successo.")
+            except Exception as e:
+                print(f"Errore durante la cancellazione: {e}")
+
+        yes = ctk.CTkButton(self.delete_window, width=100, text='Yes',
+                            fg_color="red", hover_color="#8B0000", text_color="white",
+                            command=confirm_yes)
+        yes.place(x=30, y=120)
+
+        no = ctk.CTkButton(self.delete_window, width=100, text='No',
+                        fg_color=COLORS["bianco_puro"], text_color=COLORS["testo_scuro"], 
+                        command=self.delete_window.destroy)
+        no.place(x=200, y=120)
 
 if __name__ == "__main__":
     # Simula quello che succederebbe dopo il login
     user_test = 2 
     app = AdminApp(user_test) # Passo la stringa
     app.mainloop()
-
-
-
-
-
 
 
 

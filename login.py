@@ -2,6 +2,7 @@ import sqlite3 as sql
 import customtkinter as ctk
 
 from doctor import DoctorApp
+from patient import PatientApp
 from admin import AdminApp
 
 import hashlib
@@ -87,23 +88,20 @@ class LoginApp():
                 user_type = self.cursor.fetchone()[0]
 
                 if user_type == "Patient":
-                    #PatientApp(user)
-                    print("Patient")
+                    self.root.after(500, lambda: (self.root.destroy(), PatientApp(ID[0])))
+
                 elif user_type == "Doctor":
-                    self.root.destroy()
-                    DoctorApp(ID)
+                    self.root.after(500, lambda: (self.root.destroy(), DoctorApp(ID)))
+
                 else:
-                    self.root.destroy()
-                    AdminApp(ID[0])
-                    
-
-
-                #print(ID)
+                    self.root.after(500, lambda: (self.root.destroy(), AdminApp(ID[0])))
 
             else:
                 self.outcome_label.configure(text=f"Wrong Password")
                 self.outcome_label.configure(text_color="red")
 
         else:
-            self.outcome_label.configure(text="Username doesn't exist.") # UPDATE Label Text
+            self.outcome_label.configure(text="Username doesn't exist.")
             self.outcome_label.configure(text_color="red")
+
+LoginApp()
