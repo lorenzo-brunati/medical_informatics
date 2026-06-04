@@ -8,6 +8,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 
 from tkinter import filedialog
+from tkinter import messagebox
 import shutil
 
 from reportlab.lib.pagesizes import letter
@@ -17,6 +18,7 @@ from reportlab.lib import colors
         
 from PIL import Image
 
+import bcrypt
 import hashlib
 
 COLORS = {
@@ -64,16 +66,20 @@ class DoctorApp():
     def __init__(self, ID):
         
         self.ID = ID
-        self.conn = sql.connect("database.db")
-        self.cursor = self.conn.cursor()
-        
         self.root = ctk.CTk()
         self.root.title("DoctorApp")
 
         self.root.geometry("1600x900")
-        
+
         self.upload_icons()
+
+        self.conn = sql.connect("database.db")
+        self.cursor = self.conn.cursor()
         self.algorithm()
+
+        # Recupero le informazioni personali dal database
+        self.cursor.execute("SELECT Name, Surname, BirthDate, Address, PhoneNumber, Email, Username, Password, FiscalCode FROM user WHERE Id = ?", self.ID)
+        self.user_data = self.cursor.fetchone()
 
         self.setup_gui()
         self.root.mainloop()
@@ -104,6 +110,8 @@ class DoctorApp():
 
         self.main = ctk.CTkFrame(self.root, fg_color=COLORS["sfondo_grigino"])
         self.main.place(relx=0, rely=0.15, relheight=0.85, relwidth=1)
+
+        self.profile_page_frame = None
 
         self.welcome()
         self.nav_buttons()
@@ -151,8 +159,10 @@ class DoctorApp():
 
     def side_buttons(self):
         self.btn_profile = ctk.CTkButton(self.icon_container, text="", image=self.img_profile, width=40, height=40, corner_radius=20, fg_color=COLORS["bottone_grigio"],
-                                         hover_color=COLORS["blu_acceso"], border_color=COLORS["bordi"], border_width=1, command=self.mostra_profilo)
+                                         hover_color=COLORS["blu_acceso"], border_color=COLORS["bordi"], border_width=1, command=lambda b="Profile": self.switch_tab(b))
         self.btn_profile.pack(side="right", padx=6, pady=5)
+
+        self.buttons_dict["Profile"] = self.btn_profile
 
         self.btn_support = ctk.CTkButton(self.icon_container, text="", image=self.img_support, width=40, height=40, corner_radius=20, fg_color=COLORS["bottone_grigio"],
                                          hover_color=COLORS["blu_acceso"], border_color=COLORS["bordi"], border_width=1, command=self.support_popup)
@@ -167,6 +177,9 @@ class DoctorApp():
             self.patients()
         elif tab == "Dashboard":
             self.dashboard()
+        elif tab == "Profile":
+            self.mostra_profilo()
+        
 
     def update_buttons(self, current_tab):
         for tab, btn in self.buttons_dict.items():
@@ -2387,8 +2400,251 @@ class DoctorApp():
 
             row.grid_columnconfigure(2, weight=1)       
 
+    #PROFILE
     def mostra_profilo(self):
-        print("Profilo")
+        self.clear_content_frame()
 
-#ID = (3,)
-#DoctorApp(ID)
+        #creo un frame a sinistra che conterrà le opzioni del profilo (Personal Info, Settings, Logout)
+        self.side_frame = ctk.CTkFrame(self.main, fg_color=COLORS["bianco_puro"], corner_radius=20, border_color=COLORS["bordi"])
+        self.side_frame.place(x=42, y=20, relheight=0.88, relwidth=0.16)
+        
+        #opzioni del menu del profilo
+        self.profile_buttons = {}
+        opzioni = ["Personal Info", "Settings", "Privacy", "Logout"]
+
+        #creo un bottone per ogni opzione del menu del profilo, invsibile per non alterare il layout
+        for i, opzione in enumerate(opzioni):
+            btn = ctk.CTkButton(self.side_frame, text=f"   {opzione}", font=FONTS["testo_bold"], height=40, width=180, corner_radius=0, anchor="w", fg_color="transparent", text_color=COLORS["testo_scuro"], hover_color=COLORS["bordi"], command=lambda o=opzione: self.cambia_pagina_profilo(o))
+            self.profile_buttons[opzione] = btn
+            btn.pack(padx=(2,2),pady=(24,0), fill="x") if i ==0 else  btn.pack(padx=(2,2),pady=0, fill = "x")
+    
+    def cambia_pagina_profilo(self, nome):
+        # Questa funzione è chiamata quando clicco su una voce del menu del profilo
+        if self.profile_page_frame:
+            self.profile_page_frame.destroy()
+
+        self.profile_page_frame = ctk.CTkFrame(self.main, fg_color=COLORS["sfondo_grigino"])
+        self.profile_page_frame.place(relx=0.2, rely=0, relwidth=0.8, relheight=1)
+        
+        #dinaimica simile a quella dei bottoni principali, ma con colori invertiti 
+        for chiave,opt in self.profile_buttons.items():
+            if chiave == nome:
+                opt.configure(fg_color=COLORS["bordi"])
+            else:
+                opt.configure(fg_color="transparent")
+
+        if nome == "Personal Info":
+            self.mostra_profile_personal_info()
+        elif nome == "Settings":
+            self.mostra_placeholder(nome)
+        elif nome == "Privacy":
+            self.mostra_placeholder(nome)
+        elif nome == "Logout":
+            risposta = messagebox.askyesno("Log-out", "Are you sure you want to log out?")
+            if risposta:
+                if hasattr(self, 'conn') and self.conn:
+                    self.conn.close()
+                self.root.destroy()
+                
+    def mostra_profile_personal_info(self):
+
+        #Frame principale di contenimento scorrevole (allineato a destra del menu profilo)
+        self.content_scroll = ctk.CTkScrollableFrame(self.profile_page_frame, fg_color="transparent", height=600)
+        self.content_scroll.pack(fill="both", expand=True, padx=0, pady=(10,0))
+
+        # Sfrutto una griglia all'interno del frame per dividere lo spazio in 2 colonne
+        self.content_scroll.grid_columnconfigure(0, weight=1, pad=30)
+        self.content_scroll.grid_columnconfigure(1, weight=1, pad=30)
+
+        # Ogni elemento definisce: label, valore dal DB, colonna, e se è modificabile
+        campi = [
+            {"lbl": "First Name",    "val": self.user_data[0], "col": 1, "modificabile": False},
+            {"lbl": "Last Name",     "val": self.user_data[1], "col": 0, "modificabile": False},
+            {"lbl": "Birth Date",    "val": self.user_data[2], "col": 1, "modificabile": False},
+            {"lbl": "Address",       "val": self.user_data[3], "col": 0, "modificabile": True},
+            {"lbl": "Phone Number",  "val": self.user_data[4], "col": 1, "modificabile": True},
+            {"lbl": "Email",         "val": self.user_data[5], "col": 0, "modificabile": True},
+            {"lbl": "Username",      "val": self.user_data[6], "col": 0, "modificabile": False},
+            {"lbl": "Password",      "val": self.user_data[7], "col": 1, "modificabile": True},
+            {"lbl": "Fiscal Code",   "val": self.user_data[8], "col": 0, "modificabile": False}
+        ]
+
+
+        # Titolo Sezione
+        ctk.CTkLabel(self.content_scroll, text="Personal Information", font=FONTS["testo_bold"], text_color=COLORS["testo_scuro"]).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 20), padx= 12)
+
+        # Ciclo per generare le label e i campi di testo
+        for i, campo in enumerate(campi):
+            riga = (i//2)+1 # La riga dipende dall'indice, ogni 2 campi cambio riga
+
+            #creo e posiziono il container per ogni campo
+            field_frame = ctk.CTkFrame(self.content_scroll, fg_color="transparent")
+            field_frame.grid(row=riga, column=campo["col"], sticky="ew", pady=10, padx=10)
+            field_frame.grid_columnconfigure(0, weight=1)
+            
+            # Label del campo
+            ctk.CTkLabel(field_frame, text=campo["lbl"], font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"]).grid(row=0, column=0, sticky="w", padx=5, pady=0)
+
+            # Se il campo è modificabile, mettiamo un'Entry normale, altrimenti la blocchiamo, mostro gli asterischi per la password    
+            entry = ctk.CTkEntry(
+                field_frame, font=FONTS["testo_normale"], height=45, fg_color=COLORS["bianco_puro"],
+                corner_radius=8, border_width=0,
+                text_color=COLORS["testo_chiaro"] if campo["modificabile"] else COLORS["bordi"],
+                show="*" if campo["lbl"] == "Password" else None
+            )
+            entry.insert(0, campo["val"])
+
+            #Se non è modificabile, disattiviamo l'entry
+            if not campo["modificabile"]:
+                entry.configure(state="disabled")
+
+           # Posizioniamo l'entry all'interno del suo frame     
+            entry.grid(row=1, column=0, sticky="ew")
+
+            # Se il campo è modificabile, aggiungiamo di fianco il pulsantino per il popup
+            if campo["modificabile"]:
+                entry.grid(row=1, column=0, sticky="ew") # Lascia spazio a destra per il bottoncino
+                btn_profile_edit = ctk.CTkButton(
+                    field_frame, text="Update", width=35, height=30, corner_radius=14,
+                    fg_color=COLORS["bottone_grigio"], text_color=COLORS["testo_scuro"],
+                    hover_color=COLORS["bordi"],  border_color=COLORS["bordi"], bg_color="white",
+                    command=lambda campo_nome=campo["lbl"], campo_val=campo["val"]: self.apri_popup_modifica(campo_nome, campo_val)
+                )
+                btn_profile_edit.place(relx=0.98, rely=0.69, anchor="e")
+
+    def apri_popup_modifica(self, nome_campo, valore_attuale):
+        popup = ctk.CTkToplevel(self.root, fg_color=COLORS["sfondo_grigino"])
+        popup.title(f"Edit {nome_campo}")
+        popup.geometry("400x360")
+        popup.grab_set() 
+        
+        ctk.CTkLabel(popup, text=f"Modify your {nome_campo}:", font=FONTS["titolo"], text_color=COLORS["testo_scuro"]).pack(pady=(30,30))
+        
+        # Se è la password, gestisco il popup in modo da mostrare gli asterischi, e richiedere di inserire la password attuale per confermare l'identità dell'utente (per sicurezza)
+        if nome_campo == "Password":
+            popup.geometry("400x440")
+            ctk.CTkLabel(popup, text="Current Password:", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"]).pack(pady=(0,0), padx=78, anchor="w")
+            current_pw_entry = ctk.CTkEntry(popup, width=250, height=40,  corner_radius=8, border_color=COLORS["bordi"], text_color=COLORS["testo_chiaro"], show="*")
+            current_pw_entry.pack(pady=(0,15))
+
+            #chiedo di inserire la nuova password
+            ctk.CTkLabel(popup, text="New Password:", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"]).pack(pady=(0,0), padx=78, anchor="w")
+            nuovo_input = ctk.CTkEntry(popup, width=250, height=40,  corner_radius=8, border_color=COLORS["bordi"], text_color=COLORS["testo_chiaro"], show="*")
+            nuovo_input.pack(pady=(0,15))
+
+            #chiedo conferma della nuova password
+            ctk.CTkLabel(popup, text="Confirm New Password:", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"]).pack(pady=(0,0), padx=78, anchor="w")
+            confirm_input = ctk.CTkEntry(popup, width=250, height=40,  corner_radius=8, border_color=COLORS["bordi"], text_color=COLORS["testo_chiaro"], show="*")
+            confirm_input.pack(pady=(0,0))
+
+        else:
+            ctk.CTkLabel(popup, text="Insert Current Password:", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"]).pack(pady=(0,0), padx=78, anchor="w")
+            current_pw_entry = ctk.CTkEntry(popup, width=250, height=40,  corner_radius=8, border_color=COLORS["bordi"], text_color=COLORS["testo_chiaro"], show="*")
+            current_pw_entry.pack(pady=(0,15))
+
+            ctk.CTkLabel(popup, text=f"Insert New {nome_campo}:", font=FONTS["testo_normale"], text_color=COLORS["testo_scuro"]).pack(pady=(0,0), padx=78, anchor="w")
+            nuovo_input = ctk.CTkEntry(popup, width=250, height=40,  corner_radius=8, border_color=COLORS["bordi"], text_color=COLORS["testo_chiaro"])
+            nuovo_input.insert(0, valore_attuale)
+            nuovo_input.pack(pady=(0,0))
+            
+        # Sottofunzione per salvare la modifica, aggiorna il database e rinfresca la pagina del profilo così si vede subito il nuovo dato
+        def salva_modifica():
+            nuovo_valore = nuovo_input.get().strip()
+            password_inserita = current_pw_entry.get().strip()
+            
+            if not nuovo_valore:
+                return 
+
+            from_labels_to_db = {
+                "Address": "Address",
+                "Phone Number": "PhoneNumber",
+                "Email": "Email",
+                "Password": "Password"
+            }
+            
+            nome_colonna_db = from_labels_to_db.get(nome_campo)
+            
+            hash_db = self.user_data[8]
+            if isinstance(hash_db, str):
+                hash_db = hash_db.encode('utf-8')
+
+            try:
+                password_corretta = bcrypt.checkpw(password_inserita.encode('utf-8'), hash_db)
+            except ValueError:
+                password_corretta = (password_inserita == self.user_data[8])
+
+            if not password_corretta:
+                if hasattr(popup, "errore_label") and popup.errore_label:
+                    popup.errore_label.destroy()
+                popup.errore_label = ctk.CTkLabel(popup.error_container, text="Incorrect current password.", font=FONTS["testo_normale"], text_color="red")
+                popup.errore_label.pack()
+                return
+
+            if nome_colonna_db != "Password":
+                try:
+                    self.cursor.execute(f"UPDATE user SET {nome_colonna_db} = ? WHERE username = ?", (nuovo_valore, self.user[0]))
+                    self.conn.commit() 
+                    
+                    if hasattr(popup, "errore_label") and popup.errore_label:
+                        popup.errore_label.destroy()
+                    popup.errore_label = ctk.CTkLabel(popup.error_container, text="Aggiornamento completato con successo", font=FONTS["testo_normale"], text_color="green")
+                    popup.errore_label.pack() 
+                    print(f"Database aggiornato con successo: {nome_colonna_db}")
+                    
+                except sql.Error as e:
+                    if hasattr(popup, "errore_label") and popup.errore_label:
+                        popup.errore_label.destroy()
+                    popup.errore_label = ctk.CTkLabel(popup.error_container, text=f"Errore DB: {e}", font=FONTS["testo_normale"], text_color="red")
+                    popup.errore_label.pack()
+
+            elif nome_colonna_db == "Password":
+                valore_conferma = confirm_input.get().strip()
+                
+                if nuovo_valore != valore_conferma:
+                    if hasattr(popup, "errore_label") and popup.errore_label:
+                        popup.errore_label.destroy()
+                    popup.errore_label = ctk.CTkLabel(popup.error_container, text="New passwords do not match.", font=FONTS["testo_normale"], text_color="red")
+                    popup.errore_label.pack() 
+                    return
+                else:
+                    try:
+                        nuovo_hash = bcrypt.hashpw(nuovo_valore.encode('utf-8'), bcrypt.gensalt())
+                        
+                        self.cursor.execute(f"UPDATE user SET {nome_colonna_db} = ? WHERE username = ?", (nuovo_hash, self.user[0]))
+                        self.conn.commit()
+                        
+                        lista_dati = list(self.user_data)
+                        lista_dati[8] = nuovo_hash.decode('utf-8')
+                        self.user_data = tuple(lista_dati)
+                        
+                        if hasattr(popup, "errore_label") and popup.errore_label:
+                            popup.errore_label.destroy()
+                        popup.errore_label = ctk.CTkLabel(popup.error_container, text="Password updated successfully", font=FONTS["testo_normale"], text_color="green")
+                        popup.errore_label.pack()
+                        
+                    except sql.Error as e:
+                        if hasattr(popup, "errore_label") and popup.errore_label:
+                            popup.errore_label.destroy()
+                        popup.errore_label = ctk.CTkLabel(popup.error_container, text=f"Error updating password: {e}", font=FONTS["testo_normale"], text_color="red")
+                        popup.errore_label.pack() 
+                        return
+                    
+            self.cambia_pagina_profilo("Personal Info")
+
+        # Creo un container per i messaggi di errore/successo, così si posizionano sempre nello stesso punto e non spostano il layout se appaiono
+        popup.error_container = ctk.CTkFrame(popup, height=30, fg_color="transparent")
+        popup.error_container.pack(pady=(15, 15), fill="x")
+        popup.error_container.pack_propagate(False)
+            
+        save_btn = ctk.CTkButton(popup, text="Save", font=FONTS["testo_bold"], fg_color=COLORS["blu_acceso"], command=salva_modifica)
+        save_btn.pack(pady=(0,10))
+
+    def mostra_placeholder(self, nome):
+        ctk.CTkLabel(self.main, text=f"{nome} page content goes here.", font=FONTS["testo_bold"], text_color=COLORS["testo_scuro"]).place(relx=0.5, rely=0.5, anchor="center")
+
+
+
+    
+
+
+

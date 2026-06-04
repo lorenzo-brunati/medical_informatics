@@ -7,7 +7,6 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 from tkinter import filedialog
 import PIL
-import struct
 import bcrypt
 
 from tkinter import filedialog
@@ -61,13 +60,17 @@ class PatientApp():
     def __init__(self, ID):
         self.p_id = ID
         
-        # Database e finestra principale
-        self.conn = sql.connect("database.db")
-        self.cursor = self.conn.cursor()
+    
         self.root = ctk.CTk()
         self.root.title("PatientApp")
         self.root.geometry("1600x900")
-        
+
+      
+        self.carica_icone()
+
+        self.conn = sql.connect("database.db")
+        self.cursor = self.conn.cursor()
+
         # Questa mi serve per distruggere le pagine vecchie quando cambio sezione
         self.current_page_frame = None
         self.profile_page_frame = None
@@ -100,8 +103,6 @@ class PatientApp():
         self.patient_height = clinical[0]
         self.patient_weight = clinical[1]
 
-        # Carico le icone e poi costruisco la grafica
-        self.carica_icone()
         self.setup_gui()
         
         self.root.mainloop()
@@ -569,9 +570,9 @@ class PatientApp():
         elif nome == "Logout":
             risposta = messagebox.askyesno("Log-out", "Are you sure you want to log out?")
             if risposta:
-                from login import LoginApp
+                if hasattr(self, 'conn') and self.conn:
+                    self.conn.close()
                 self.root.destroy()
-                LoginApp()
 
     def mostra_profile_personal_info(self):
 
@@ -585,15 +586,15 @@ class PatientApp():
 
         # Ogni elemento definisce: label, valore dal DB, colonna, e se è modificabile
         campi = [
-            {"lbl": "First Name",    "val": self.user_data[1], "col": 1, "modificabile": False},
-            {"lbl": "Last Name",     "val": self.user_data[2], "col": 0, "modificabile": False},
-            {"lbl": "Birth Date",    "val": self.user_data[3], "col": 1, "modificabile": False},
-            {"lbl": "Address",       "val": self.user_data[4], "col": 0, "modificabile": True},
-            {"lbl": "Phone Number",  "val": self.user_data[5], "col": 1, "modificabile": True},
-            {"lbl": "Email",         "val": self.user_data[6], "col": 0, "modificabile": True},
-            {"lbl": "Username",      "val": self.user_data[7], "col": 0, "modificabile": False},
-            {"lbl": "Password",      "val": self.user_data[8], "col": 1, "modificabile": True},
-            {"lbl": "Fiscal Code",   "val": self.user_data[9], "col": 0, "modificabile": False}
+            {"lbl": "First Name",    "val": self.user_data[0], "col": 1, "modificabile": False},
+            {"lbl": "Last Name",     "val": self.user_data[1], "col": 0, "modificabile": False},
+            {"lbl": "Birth Date",    "val": self.user_data[2], "col": 1, "modificabile": False},
+            {"lbl": "Address",       "val": self.user_data[3], "col": 0, "modificabile": True},
+            {"lbl": "Phone Number",  "val": self.user_data[4], "col": 1, "modificabile": True},
+            {"lbl": "Email",         "val": self.user_data[5], "col": 0, "modificabile": True},
+            {"lbl": "Username",      "val": self.user_data[6], "col": 0, "modificabile": False},
+            {"lbl": "Password",      "val": self.user_data[7], "col": 1, "modificabile": True},
+            {"lbl": "Fiscal Code",   "val": self.user_data[8], "col": 0, "modificabile": False}
         ]
 
 

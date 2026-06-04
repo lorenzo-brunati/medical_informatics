@@ -88,13 +88,14 @@ class LoginApp():
                 user_type = self.cursor.fetchone()[0]
 
                 if user_type == "Patient":
-                    self.root.after(500, lambda: (self.root.destroy(), PatientApp(ID[0])))
+                    self.root.after(500, self.launch_patient, ID)
 
                 elif user_type == "Doctor":
-                    self.root.after(500, lambda: (self.root.destroy(), DoctorApp(ID)))
+                    self.root.after(500, self.launch_doctor, ID)
 
                 else:
-                    self.root.after(500, lambda: (self.root.destroy(), AdminApp(ID[0])))
+                    self.root.after(500, self.launch_admin, ID)
+
 
             else:
                 self.outcome_label.configure(text=f"Wrong Password")
@@ -103,5 +104,17 @@ class LoginApp():
         else:
             self.outcome_label.configure(text="Username doesn't exist.")
             self.outcome_label.configure(text_color="red")
+
+    def launch_patient(self, ID):
+        self.root.destroy() 
+        PatientApp(ID[0])
+
+    def launch_doctor(self, ID):
+        self.root.destroy() 
+        DoctorApp(ID)
+
+    def launch_admin(self, ID):
+        self.root.destroy() 
+        AdminApp(ID[0])
 
 LoginApp()

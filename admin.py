@@ -188,10 +188,10 @@ class AdminApp(ctk.CTk):
     
     def welcome(self):
         
-        self.cursor.execute("SELECT surname FROM user WHERE ID = ?", (self.ID,))
-        surname = self.cursor.fetchall()[0][0] 
-
-        self.surname_label = ctk.CTkLabel(self.topbar, text=f"Hello, Admin {surname}!", font=FONTS["titolo"], text_color=COLORS["testo_chiaro"])
+        self.cursor.execute("SELECT name FROM user WHERE ID = ?", (self.ID,))
+        name = self.cursor.fetchall()[0][0]
+        
+        self.surname_label = ctk.CTkLabel(self.topbar, text=f"Hello, {name}!", font=FONTS["titolo"], text_color=COLORS["testo_chiaro"])
         self.surname_label.place(x=50, y=30)
 
         self.welcome_label = ctk.CTkLabel(self.topbar, text="See what's going on", font=FONTS["titolo"], text_color=COLORS["testo_scuro"])
