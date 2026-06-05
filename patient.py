@@ -7,7 +7,6 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 from tkinter import filedialog
 import PIL
-import bcrypt
 
 from tkinter import filedialog
 from tkinter import messagebox
@@ -306,7 +305,7 @@ class PatientApp():
 
         # Pannello last message
         p_msg = aggiungi_pannello(0.69, 0.37, 0.28, 0.28, "Last Message")
-        ctk.CTkLabel(p_msg, text=f"{dati["last_msg_text"][:60]}...", font=FONTS["testo_bold"], text_color=COLORS["testo_chiaro"], justify="left", wraplength=300).place(relx=0.08, rely=0.28)
+        ctk.CTkLabel(p_msg, text=f"{dati['last_msg_text'][:60]}...", font=FONTS["testo_bold"], text_color=COLORS["testo_chiaro"], justify="left", wraplength=300).place(relx=0.08, rely=0.28)
         
         # Bottoni del Messaggio
         if dati["last_msg_details"] is not None:
@@ -2056,3 +2055,5 @@ class PatientApp():
     def mostra_placeholder(self, nome):
         ctk.CTkLabel(self.current_page_frame, text=f"{nome} page content goes here.", font=FONTS["testo_bold"], text_color=COLORS["testo_scuro"]).place(relx=0.5, rely=0.5, anchor="center")
 
+#ID = 4
+#PatientApp(ID)

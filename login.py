@@ -117,4 +117,3 @@ class LoginApp():
         self.root.destroy() 
         AdminApp(ID[0])
 
-LoginApp()

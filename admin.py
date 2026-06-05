@@ -24,11 +24,11 @@ FONTS = {
 class AdminApp(ctk.CTk):
 
     def carica_icone(self):
-        self.icon_notif = ctk.CTkImage(light_image=PIL.Image.open("Icons/dark_bell.png"), size=(24, 24))
-        self.icon_profile = ctk.CTkImage(light_image=PIL.Image.open("Icons/dark_user.png"), size=(20, 20))
+        self.icon_notif = ctk.CTkImage(light_image=PIL.Image.open("icons/dark_bell.png"), size=(24, 24))
+        self.icon_profile = ctk.CTkImage(light_image=PIL.Image.open("icons/dark_user.png"), size=(20, 20))
 
-        self.icon_notif_light = ctk.CTkImage(light_image=PIL.Image.open("Icons/light_bell.png"), size=(24, 24))
-        self.icon_profile_light = ctk.CTkImage(light_image=PIL.Image.open("Icons/light_user.png"), size=(20, 20))
+        self.icon_notif_light = ctk.CTkImage(light_image=PIL.Image.open("icons/light_bell.png"), size=(24, 24))
+        self.icon_profile_light = ctk.CTkImage(light_image=PIL.Image.open("icons/light_user.png"), size=(20, 20))
 
     def __init__(self, ID):
 
@@ -1081,96 +1081,5 @@ class AdminApp(ctk.CTk):
                         command=self.delete_window.destroy)
         no.place(x=200, y=120)
 
-if __name__ == "__main__":
-    # Simula quello che succederebbe dopo il login
-    user_test = 2 
-    app = AdminApp(user_test) # Passo la stringa
-    app.mainloop()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-""" def view(self, id_req):
-        # 1. Recupero del messaggio dal database
-        try:
-            self.cursor.execute("SELECT Message FROM APPOINTMENTS WHERE Id = ?", (id_req,))
-            result = self.cursor.fetchone()
-            messaggio_utente = result[0] if result and result[0] else "Nessun testo presente nel report."
-        except Exception as e:
-            print(f"Errore recupero messaggio: {e}")
-            return
-
-        # 2. Setup Finestra
-        self.view_window = ctk.CTkToplevel(self)
-        self.view_window.geometry("500x650") # Più alta per ospitare due aree di testo
-        self.view_window.configure(fg_color=COLORS["bianco_puro"])
-        self.view_window.title("View & Reply to Request")
-        self.view_window.grab_set()
-
-        # Titolo
-        title = ctk.CTkLabel(self.view_window, text="User Request", font=FONTS["titolo"], text_color=COLORS["testo_scuro"])
-        title.pack(pady=(20, 10), padx=30, anchor="w")
-
-        # --- AREA VISUALIZZAZIONE MESSAGGIO (Sola lettura) ---
-        label_req = ctk.CTkLabel(self.view_window, text="Received Message:", font=FONTS["testo_bold"])
-        label_req.pack(padx=30, anchor="w")
-        
-        display_text = ctk.CTkTextbox(self.view_window, width=440, height=150, font=FONTS["testo_normale"])
-        display_text.insert("0.0", messaggio_utente)
-        display_text.configure(state="disabled") # Disabilitato per evitare modifiche al messaggio originale
-        display_text.pack(pady=(5, 20), padx=30)
-
-        # --- AREA RISPOSTA (Scrivibile) ---
-        label_reply = ctk.CTkLabel(self.view_window, text="Your Reply:", font=FONTS["testo_bold"])
-        label_reply.pack(padx=30, anchor="w")
-        
-        reply_text = ctk.CTkTextbox(self.view_window, width=440, height=150, font=FONTS["testo_normale"])
-        reply_text.pack(pady=(5, 20), padx=30)
-
-        # 3. Logica di Invio Risposta
-        def send_reply():
-            risposta = reply_text.get("0.0", "end").strip() # Prende tutto il testo inserito
-            
-            if not risposta:
-                print("La risposta è vuota!")
-                return
-
-            try:
-                # Assumo che esista una colonna 'AdminReply' o simile nella tabella APPOINTMENTS
-                # Se non esiste, dovrai crearla nel DB o usare una tabella di messaggistica dedicata
-                self.cursor.execute(
-                
-                #UPDATE APPOINTMENTS
-                #SET AdminReply = ? 
-                #WHERE Id = ?
-                , (risposta, id_req))
-                self.conn.commit()
-                print("Risposta inviata con successo!")
-                self.view_window.destroy()
-                    
-            except Exception as e:
-                    print(f"Errore durante l'invio della risposta: {e}")
-            # Tasto Invio
-            send_btn = ctk.CTkButton(
-                self.view_window, 
-                text="Send Reply", 
-                fg_color=COLORS["blu_acceso"],
-                width=200, 
-                height=40,
-                command=send_reply
-            )
-            send_btn.pack(pady=20) """
+#ID = 1
+#AdminApp(ID)

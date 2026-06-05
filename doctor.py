@@ -18,7 +18,6 @@ from reportlab.lib import colors
         
 from PIL import Image
 
-import bcrypt
 import hashlib
 
 COLORS = {
@@ -2642,7 +2641,8 @@ class DoctorApp():
     def mostra_placeholder(self, nome):
         ctk.CTkLabel(self.main, text=f"{nome} page content goes here.", font=FONTS["testo_bold"], text_color=COLORS["testo_scuro"]).place(relx=0.5, rely=0.5, anchor="center")
 
-
+#ID = (3,)
+#DoctorApp(ID)
 
     
 
